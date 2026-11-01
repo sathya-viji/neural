@@ -372,6 +372,12 @@ $("#save-settings").addEventListener("click", async (e) => {
   settings.local = { baseUrl: $("#local-url").value.trim() || "http://localhost:11434/v1", model: $("#local-model").value.trim() || "qwen3:8b" };
   settings.cloud = { kind: $("#cloud-kind").value, model: $("#cloud-model").value.trim(), baseUrl: $("#cloud-url").value.trim() || undefined };
   const key = $("#cloud-key").value.trim();
+  if (key && settings.cloud.kind === "anthropic" && (key.includes("…") || key.includes("...") || key.length < 60)) {
+    const status = $("#cloud-status");
+    status.className = "hint bad";
+    status.textContent = "That looks like the shortened key shown in the Console's key list, not the full key. Create a new key and copy it with the copy button (it's about 100 characters).";
+    return;
+  }
   if (key) await uab.call("key.set", key);
   const { model } = await uab.call("settings.set", settings);
   $("#model-label").textContent = model;
