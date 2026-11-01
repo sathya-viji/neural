@@ -35,7 +35,7 @@ function scripted(steps) {
 }
 
 before(async () => {
-  kernel = new KernelClient({ env: { UAB_HOME: home, UAB_VAULT_FILE: "1" } });
+  kernel = new KernelClient({ env: { UAB_HOME: home, UAB_VAULT_FILE: "1", UAB_DEMO_SERVICES: "1" } });
   await kernel.start();
   await kernel.call("policy.setFileRoots", { roots: [docs] });
   kernel.onEvent("approval.requested", (req) => {
@@ -147,7 +147,7 @@ test("activity history is complete and tamper-evident", async () => {
   first.detail = "something else";
   lines[0] = JSON.stringify(first);
   writeFileSync(path, lines.join("\n") + "\n");
-  const fresh = new KernelClient({ env: { UAB_HOME: home, UAB_VAULT_FILE: "1" } });
+  const fresh = new KernelClient({ env: { UAB_HOME: home, UAB_VAULT_FILE: "1", UAB_DEMO_SERVICES: "1" } });
   await fresh.start();
   const broken = await fresh.call("audit.verify", {});
   fresh.stop();

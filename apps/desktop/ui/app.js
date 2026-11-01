@@ -23,7 +23,7 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-const SERVICE_NAMES = { files: "Files", contacts: "Contacts", mail: "Mail (local outbox)", system: "This computer" };
+const SERVICE_NAMES = { files: "Files", contacts: "Contacts", mail: "Mail", calendar: "Calendar", reminders: "Reminders", system: "This computer" };
 const serviceName = (id) => SERVICE_NAMES[id] ?? id.replace(/^mcp\./, "");
 
 /* ---------------- navigation ---------------- */

@@ -8,6 +8,7 @@ import { fileCapabilities } from "./builtin/files.js";
 import { contactCapabilities } from "./builtin/contacts.js";
 import { mailCapabilities } from "./builtin/mail.js";
 import { systemCapabilities } from "./builtin/system.js";
+import { appleCapabilities } from "./builtin/apple.js";
 import { readJson, writeJson } from "./store.js";
 import type { Vault } from "./vault.js";
 
@@ -26,10 +27,15 @@ interface ServicesConfig {
   >;
 }
 
+/** On a Mac, use the real Mail/Contacts/Calendar/Reminders apps. Elsewhere, or with UAB_DEMO_SERVICES=1, use the demo ones. */
+const useAppleApps = process.platform === "darwin" && !process.env.UAB_DEMO_SERVICES;
+
 const BUILTIN_TITLES: Record<string, string> = {
   files: "Files",
-  contacts: "Contacts",
-  mail: "Mail (local outbox)",
+  contacts: useAppleApps ? "Contacts" : "Contacts (demo)",
+  mail: useAppleApps ? "Apple Mail" : "Mail (local outbox)",
+  calendar: "Calendar",
+  reminders: "Reminders",
   system: "This computer",
 };
 
@@ -49,7 +55,8 @@ export class ServiceHub {
   private configPath: string;
 
   constructor(private ctx: ProviderContext, private vault: Vault) {
-    for (const cap of [...fileCapabilities, ...contactCapabilities, ...mailCapabilities, ...systemCapabilities]) {
+    const personal = useAppleApps ? appleCapabilities : [...contactCapabilities, ...mailCapabilities];
+    for (const cap of [...fileCapabilities, ...personal, ...systemCapabilities]) {
       this.builtins.set(cap.id, cap);
     }
     this.configPath = join(ctx.home, "services.json");
