@@ -75,7 +75,7 @@ async function searchWikipedia(query: string): Promise<{ content: string; source
 /* ---------------- page reading ---------------- */
 
 /** Don't let a web request reach this computer or the local network. */
-async function assertPublic(url: URL): Promise<void> {
+export async function assertPublic(url: URL): Promise<void> {
   if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("Only web pages (http/https) can be read");
   const host = url.hostname.replace(/^\[|\]$/g, "");
   const addresses = isIP(host) ? [host] : (await lookup(host, { all: true })).map((a) => a.address);
@@ -174,6 +174,38 @@ export const webCapabilities: BuiltinCapability[] = [
         content: `${title ? `Title: ${stripTags(title)}\n` : ""}Address: ${res.url}\n\n${text.length > max ? `${text.slice(0, max)}\n… [page shortened]` : text}`,
         data: { url: res.url, title },
       };
+    },
+  },
+  {
+    id: "browser.show",
+    service: "browser",
+    title: "Show a web page",
+    description:
+      "Open a web page, or a Google search, in the app's built-in browser for the user to look at. Use it for source links, or when the user wants to see results or a page themselves. Give either url or query.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "https:// address to show" },
+        query: { type: "string", description: "Words to search for on Google, shown to the user" },
+      },
+    },
+    effects: ["read"],
+    risk: "low",
+    summarize: (a) => (a.query ? `Show a Google search for "${a.query}"` : `Show ${a.url}`),
+    async run(args) {
+      const query = str(args, "query", false);
+      let url: URL;
+      if (query) url = new URL(`https://www.google.com/search?q=${encodeURIComponent(query)}`);
+      else {
+        try {
+          url = new URL(str(args, "url"));
+        } catch {
+          throw new Error("Give a web address (url) or search words (query)");
+        }
+        await assertPublic(url);
+      }
+      // The app's browser opens it; the user looks at it. Nothing here reads the page.
+      return { content: `Opened ${url.href} in the app's browser for the user.`, data: { openInBrowser: url.href } };
     },
   },
   {

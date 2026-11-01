@@ -63,7 +63,7 @@ function submit(text) {
   const steps = el("div", { class: "steps" });
   container.append(steps);
   transcript.append(container);
-  current = { container, stepsNode: steps, steps: new Map() };
+  current = { container, stepsNode: steps, steps: new Map(), question: text };
   input.value = "";
   autosize();
   setBusy(true);
@@ -119,7 +119,7 @@ function onGateway(e) {
     node.querySelector(".icon").textContent = d.status === "executed" ? "✓" : "✕";
     const detail = node.querySelector(".detail");
     if (d.status === "executed") {
-      detail.textContent = d.replayed ? "Already done earlier — not repeated." : firstLines(d.result.content, 3);
+      detail.replaceChildren(d.replayed ? "Already done earlier — not repeated." : richText(firstLines(d.result.content, 3)));
       const file = d.result.data?.file;
       if (file) detail.after(el("button", { class: "link", onclick: () => uab.call("reveal", file) }, "Show in Finder"));
       node.querySelector(".meta").textContent = d.approvedBy === "user" ? "You approved" : d.verified ? "Allowed" : "Not verified";
@@ -133,7 +133,13 @@ function onGateway(e) {
   } else if (e.type === "error") {
     current.container.append(el("div", { class: "error" }, e.message));
   } else if (e.type === "done") {
-    if (!current.container.querySelector(".error")) current.container.append(el("div", { class: "answer" }, e.text));
+    if (!current.container.querySelector(".error")) {
+      const question = current.question;
+      current.container.append(
+        el("div", { class: "answer" }, richText(e.text)),
+        el("div", { class: "answer-actions" }, el("button", { class: "link", onclick: () => uab.call("browser.go", question) }, "Search Google for this")),
+      );
+    }
     current = null;
     setBusy(false);
   }
@@ -145,6 +151,29 @@ function briefArgs(args) {
     .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : typeof v === "object" ? JSON.stringify(v) : v}`)
     .join(" · ");
   return s.length > 160 ? s.slice(0, 160) + "…" : s;
+}
+
+/**
+ * Plain text with the bits of Markdown models use: **bold**, [label](link) and
+ * bare links. Built from DOM nodes, never HTML, so nothing in a model's or a
+ * web page's text can run in this window. Links open in the built-in browser.
+ */
+function richText(text) {
+  const frag = document.createDocumentFragment();
+  const pattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>()"']+[^\s<>()"'.,;:!?])|\*\*([^*]+)\*\*/g;
+  let last = 0;
+  for (const m of String(text ?? "").matchAll(pattern)) {
+    if (m.index > last) frag.append(text.slice(last, m.index));
+    if (m[4]) frag.append(el("b", {}, m[4]));
+    else {
+      const url = (m[2] ?? m[3]).replace(/[?&]utm_source=openai$/, "");
+      const label = m[1] ?? new URL(url).hostname.replace(/^www\./, "");
+      frag.append(el("a", { href: "#", title: url, onclick: (ev) => (ev.preventDefault(), uab.call("browser.open", url)) }, label));
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < String(text ?? "").length) frag.append(String(text).slice(last));
+  return frag;
 }
 
 function firstLines(text, n) {
@@ -518,6 +547,41 @@ $("#save-settings").addEventListener("click", async (e) => {
 });
 $("#open-home").addEventListener("click", () => uab.call("openHome"));
 
+/* ---------------- Built-in browser ---------------- */
+
+const browserHost = $("#browser-host");
+
+function sendBrowserBounds() {
+  const r = browserHost.getBoundingClientRect();
+  uab.call("browser.bounds", { x: r.left, y: r.top, width: r.width, height: r.height });
+}
+new ResizeObserver(sendBrowserBounds).observe(browserHost);
+window.addEventListener("resize", sendBrowserBounds);
+
+function onBrowserState(s) {
+  $(".app").classList.toggle("with-browser", s.open);
+  $("#browser-panel").classList.toggle("hidden", !s.open);
+  if (!s.open) return;
+  const urlBox = $("#browser-url");
+  if (document.activeElement !== urlBox) urlBox.value = s.url;
+  urlBox.classList.toggle("loading", s.loading);
+  $("#browser-back").disabled = !s.canGoBack;
+  $("#browser-forward").disabled = !s.canGoForward;
+  requestAnimationFrame(sendBrowserBounds);
+}
+
+$("#browser-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  uab.call("browser.go", $("#browser-url").value);
+  $("#browser-url").blur();
+});
+$("#browser-back").addEventListener("click", () => uab.call("browser.back"));
+$("#browser-forward").addEventListener("click", () => uab.call("browser.forward"));
+$("#browser-reload").addEventListener("click", () => uab.call("browser.reload"));
+$("#browser-external").addEventListener("click", () => uab.call("browser.external"));
+$("#browser-close").addEventListener("click", () => uab.call("browser.close"));
+$("#open-browser").addEventListener("click", () => uab.call("browser.go", "https://www.google.com"));
+
 /* ---------------- events from the host ---------------- */
 
 uab.on((channel, payload) => {
@@ -527,6 +591,7 @@ uab.on((channel, payload) => {
   else if (channel === "audit.appended" && $("#view-activity").classList.contains("active")) loadActivity();
   else if (channel === "services.changed") loadServices(payload);
   else if (channel === "chatgpt.changed" && settings?.cloud.kind === "chatgpt") loadChatGPT();
+  else if (channel === "browser.state") onBrowserState(payload);
 });
 
 /* ---------------- start ---------------- */

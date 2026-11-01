@@ -48,6 +48,25 @@ code, pre { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 1
 .hidden { display: none !important; }
 
 .app { display: grid; grid-template-columns: 220px 1fr; height: 100vh; }
+.app.with-browser { grid-template-columns: 180px minmax(380px, 1fr) minmax(380px, 46%); }
+.with-browser .view { padding: 24px 22px 20px; }
+.with-browser .view-head h1 { font-size: 17px; }
+.with-browser .brand-sub { display: none; }
+
+/* Built-in browser panel */
+.browser { display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--sidebar); min-width: 0; }
+.browser-bar { display: flex; gap: 4px; align-items: center; padding: 10px 10px 8px; -webkit-app-region: drag; }
+.browser-bar > * { -webkit-app-region: no-drag; }
+.browser-bar form { flex: 1; min-width: 0; }
+.browser-bar input { width: 100%; padding: 5px 10px; border-radius: 8px; font-size: 12.5px; }
+.browser-bar input.loading { background-image: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 25%, transparent), transparent); background-size: 200% 100%; animation: load 1.2s linear infinite; }
+@keyframes load { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+button.icon { width: 28px; height: 28px; border-radius: 7px; border: 1px solid transparent; background: none; cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; }
+button.icon:hover:not(:disabled) { background: var(--panel); color: var(--text); border-color: var(--line); }
+button.icon:disabled { opacity: 0.35; cursor: default; }
+.browser-host { flex: 1; background: #fff; }
+.answer a, .detail a, .link-inline { color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.answer-actions { display: flex; gap: 14px; margin-top: 2px; }
 
 /* Sidebar */
 .sidebar {

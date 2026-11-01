@@ -174,6 +174,16 @@ test("Gmail isn't offered to the AI until it's connected", async () => {
   await assert.rejects(kernel.call("gmail.configure", { clientId: "nope", clientSecret: "x" }), /Client ID/);
 });
 
+test("show a web page: Google searches and public links open in the app's browser; local addresses don't", async () => {
+  const { taskId } = await kernel.call("task.start", { intent: "browser" });
+  const g = await kernel.call("propose", { taskId, capability: "browser.show", args: { query: "ISRO news" }, source: "agent" });
+  assert.equal(g.status, "executed");
+  assert.equal(g.result.data.openInBrowser, "https://www.google.com/search?q=ISRO%20news");
+  const local = await kernel.call("propose", { taskId, capability: "browser.show", args: { url: "http://127.0.0.1:8080/admin" }, source: "agent" });
+  assert.equal(local.status, "failed");
+  assert.match(local.error, /local network/);
+});
+
 test("vault never hands out service secrets", async () => {
   await kernel.call("vault.set", { name: "github.token", value: "s3cret" });
   await kernel.call("vault.set", { name: "model.cloud", value: "k" });

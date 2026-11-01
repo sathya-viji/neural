@@ -36,6 +36,7 @@ const TOOL_GROUPS: Record<string, RegExp> = {
   system: /\b(time|date|day|notify|notification|open|link|website)\b/i,
   web: /\b(search|look up|lookup|google|news|latest|headlines?|internet|online|web|website|https?:\/\/\S+|price|cost|who is|who was|what is|when is|where is|how (much|many|to)|score|results?|stock|movie|restaurant|near me|open now)\b/i,
   weather: /\b(weather|rain\w*|temperature|forecast|hot|cold|humid\w*|umbrella|sunny|storm\w*)\b/i,
+  browser: /\b(show me|open|google|browser|page|link|site|website|article)\b/i,
 };
 const ALWAYS = new Set(["system__now"]);
 const MAX_TOOLS = 10;

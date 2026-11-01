@@ -25,6 +25,7 @@ import {
   type ModelSettings,
 } from "@uab/gateway";
 import type { KernelEvent, Permission } from "@uab/protocol";
+import { MiniBrowser, refersToPage } from "./browser.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = join(here, "..");
@@ -34,6 +35,7 @@ let kernel: KernelClient;
 let kernelHome = "";
 let history: Message[] = [];
 let running: AbortController | null = null;
+let browser: MiniBrowser | null = null;
 
 /* ---------------- settings (which model to use) ---------------- */
 
@@ -76,10 +78,24 @@ async function ask(text: string): Promise<void> {
   }
   running = new AbortController();
   try {
+    // If the request is about the page open in the browser panel, the AI gets that page's text.
+    let context: string | undefined;
+    if (browser?.state().open && refersToPage(text)) {
+      const page = await browser.pageText().catch(() => null);
+      if (page) context = `The user is looking at this page in the app's browser.\nTitle: ${page.title}\nAddress: ${page.url}\n\n${page.text}`;
+    }
     const result = await gateway.run(text, {
       history,
+      context,
       signal: running.signal,
-      onEvent: (e) => send("gateway", e),
+      onEvent: (e) => {
+        // "Show a web page" results open in the browser panel.
+        if (e.type === "decision" && e.decision.status === "executed") {
+          const target = (e.decision.result.data as { openInBrowser?: string } | undefined)?.openInBrowser;
+          if (target) browser?.open(target);
+        }
+        send("gateway", e);
+      },
     });
     // Keep the conversation for follow-ups: what was asked and answered, not each
     // turn's tool steps. Old tool results without their calls break providers.
@@ -166,6 +182,15 @@ function registerIpc(): void {
     return {};
   });
   handle("gmail.disconnect", () => kernel.call("gmail.disconnect", {}));
+  handle("browser.open", (url: string) => (browser?.open(String(url)), {}));
+  handle("browser.go", (input: string) => (browser?.go(String(input)), {}));
+  handle("browser.back", () => (browser?.back(), {}));
+  handle("browser.forward", () => (browser?.forward(), {}));
+  handle("browser.reload", () => (browser?.reload(), {}));
+  handle("browser.external", () => (browser?.openExternal(), {}));
+  handle("browser.close", () => (browser?.close(), {}));
+  handle("browser.bounds", (b: { x: number; y: number; width: number; height: number }) => (browser?.setBounds(b), {}));
+  handle("browser.state", () => browser?.state());
   handle("chatgpt.status", () => kernel.call("chatgpt.status", {}));
   handle("chatgpt.connect", async () => {
     const { url } = await kernel.call("chatgpt.connect", {});
@@ -263,6 +288,7 @@ function createWindow(): void {
     return { action: "deny" };
   });
   win.webContents.on("will-navigate", (e) => e.preventDefault());
+  browser = new MiniBrowser(win, (state) => send("browser.state", state));
 }
 
 let quitting = false;

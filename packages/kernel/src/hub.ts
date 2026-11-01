@@ -40,6 +40,7 @@ const BUILTIN_TITLES: Record<string, string> = {
   reminders: "Reminders",
   gmail: "Gmail",
   web: "Web & weather",
+  browser: "Built-in browser",
   system: "This computer",
 };
 

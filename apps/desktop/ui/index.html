@@ -32,7 +32,10 @@
       <section class="view active" id="view-ask">
         <header class="view-head">
           <h1>What would you like done?</h1>
-          <button class="ghost" id="new-conversation">New conversation</button>
+          <div class="row">
+            <button class="ghost" id="open-browser">Browser</button>
+            <button class="ghost" id="new-conversation">New conversation</button>
+          </div>
         </header>
         <div class="transcript" id="transcript">
           <div class="empty" id="ask-empty">
@@ -170,6 +173,19 @@
         <button class="ghost" id="open-home">Open data folder</button>
       </section>
     </main>
+
+    <!-- Built-in browser: the page itself is drawn by the app in #browser-host, sandboxed from this window. -->
+    <aside class="browser hidden" id="browser-panel">
+      <div class="browser-bar">
+        <button class="icon" id="browser-back" title="Back">‹</button>
+        <button class="icon" id="browser-forward" title="Forward">›</button>
+        <button class="icon" id="browser-reload" title="Reload">↻</button>
+        <form id="browser-form"><input id="browser-url" placeholder="Search Google or type an address" autocomplete="off" spellcheck="false" /></form>
+        <button class="icon" id="browser-external" title="Open in my browser">↗</button>
+        <button class="icon" id="browser-close" title="Close">✕</button>
+      </div>
+      <div class="browser-host" id="browser-host"></div>
+    </aside>
   </div>
   <script src="app.js" type="module"></script>
 </body>
