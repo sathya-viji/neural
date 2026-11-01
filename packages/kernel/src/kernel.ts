@@ -169,8 +169,9 @@ export class Kernel extends EventEmitter {
 
   /* ---------------- internals ---------------- */
 
-  private requestApproval(proposalId: string, p: ActionProposal, cap: Capability, args: Record<string, unknown>): Promise<boolean> {
+  private async requestApproval(proposalId: string, p: ActionProposal, cap: Capability, args: Record<string, unknown>): Promise<boolean> {
     const approvalId = randomUUID();
+    const summary = await this.hub.summarize(cap.id, args);
     const request: ApprovalRequest = {
       approvalId,
       proposalId,
@@ -180,7 +181,7 @@ export class Kernel extends EventEmitter {
       reason: p.reason,
       source: p.source,
       model: p.model,
-      summary: this.hub.summarize(cap.id, args),
+      summary,
       createdAt: new Date().toISOString(),
     };
     return new Promise<boolean>((resolve) => {

@@ -10,8 +10,11 @@ export interface BuiltinCapability extends Capability {
   run(args: Record<string, unknown>, ctx: ProviderContext): Promise<ActionResult>;
   /** Check the action really happened. Absent means "trust the result". */
   verify?(args: Record<string, unknown>, result: ActionResult, ctx: ProviderContext): Promise<boolean>;
-  /** One plain sentence for the approval card. Written by the kernel, never by a model. */
-  summarize?(args: Record<string, unknown>): string;
+  /**
+   * One plain sentence for the approval card. Written by the kernel, never by a model.
+   * May look things up (e.g. the titles behind ids) so the card shows what will really happen.
+   */
+  summarize?(args: Record<string, unknown>): string | Promise<string>;
 }
 
 export function str(args: Record<string, unknown>, key: string, required = true): string {

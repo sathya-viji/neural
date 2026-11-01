@@ -136,11 +136,11 @@ export class ServiceHub {
     return this.capabilities().find((c) => c.id === id);
   }
 
-  summarize(id: string, args: Record<string, unknown>): string {
+  async summarize(id: string, args: Record<string, unknown>): Promise<string> {
     const builtin = this.builtins.get(id);
     if (builtin?.summarize) {
       try {
-        return builtin.summarize(args);
+        return await builtin.summarize(args);
       } catch {
         /* fall through to the generic summary */
       }

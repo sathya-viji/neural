@@ -319,9 +319,101 @@ const calendar: BuiltinCapability[] = [
       return !!d?.after && !!d.wanted && Math.abs(new Date(d.after.start).getTime() - new Date(d.wanted).getTime()) < 60_000;
     },
   },
+  {
+    id: "calendar.delete",
+    service: "calendar",
+    title: "Delete calendar events",
+    description: "Permanently delete one or more calendar events. Only use when the user clearly asked to delete or cancel. Get ids from calendar.events.",
+    inputSchema: {
+      type: "object",
+      properties: { ids: { type: "array", items: { type: "string" }, description: "Event ids from calendar.events" } },
+      required: ["ids"],
+    },
+    effects: ["delete"],
+    risk: "high",
+    async summarize(a) {
+      const events = await Promise.all(strList(a, "ids").map(readEvent));
+      const found = events.filter((e): e is CalEvent => !!e);
+      if (!found.length) return "Delete calendar events (none of them were found)";
+      return `Permanently delete ${found.length} event${found.length === 1 ? "" : "s"}: ${found.map((e) => `"${e.title}" (${when(e.start)})`).join(", ")}`;
+    },
+    async run(args) {
+      const ids = strList(args, "ids");
+      if (!ids.length) throw new Error("No events given");
+      const deleted: string[] = [];
+      for (const id of ids) {
+        const ev = await readEvent(id);
+        if (!ev) continue;
+        await jxa<null>("Calendar", `${FIND_EVENT} if (ev) Cal.delete(ev); return "null";`, { id });
+        deleted.push(`"${ev.title}" (${when(ev.start)})`);
+      }
+      if (!deleted.length) throw new Error("None of those events were found. List events again to get their ids.");
+      return { content: `Deleted ${deleted.join(", ")}.`, data: { ids } };
+    },
+    async verify(args) {
+      return (await Promise.all(strList(args, "ids").map(readEvent))).every((e) => e === null);
+    },
+  },
 ];
 
 /* ---------------- Reminders ---------------- */
+
+function idsSchema(description: string) {
+  return {
+    type: "object",
+    properties: { ids: { type: "array", items: { type: "string" }, description } },
+    required: ["ids"],
+  };
+}
+
+/** Kernel-side lookup so approval cards name the real reminders, whatever the model says. */
+async function reminderTitles(ids: string[]): Promise<string> {
+  if (!ids.length) throw new Error("No reminders given");
+  const titles = await jxa<(string | null)[]>(
+    "Reminders",
+    `const R = Application("Reminders");
+     return JSON.stringify(a.ids.map(id => { try { return R.reminders.byId(id).name(); } catch (e) { return null; } }));`,
+    { ids },
+  );
+  const found = titles.filter((t): t is string => !!t);
+  const missing = titles.length - found.length;
+  const shown = found.slice(0, 15).map((t) => `"${t}"`).join(", ") + (found.length > 15 ? ` and ${found.length - 15} more` : "");
+  return `${found.length} reminder${found.length === 1 ? "" : "s"}: ${shown}${missing ? ` (${missing} not found)` : ""}`;
+}
+
+async function reminderStates(ids: string[]): Promise<("open" | "done" | "missing")[]> {
+  return jxa(
+    "Reminders",
+    `const R = Application("Reminders");
+     return JSON.stringify(a.ids.map(id => { try { return R.reminders.byId(id).completed() ? "done" : "open"; } catch (e) { return "missing"; } }));`,
+    { ids },
+  );
+}
+
+async function changeReminders(action: "complete" | "delete", ids: string[]): Promise<ActionResult> {
+  if (!ids.length) throw new Error("No reminders given");
+  const results = await jxa<{ id: string; title?: string; ok: boolean; error?: string }[]>(
+    "Reminders",
+    `const R = Application("Reminders");
+     return JSON.stringify(a.ids.map(id => {
+       try {
+         const r = R.reminders.byId(id); const title = r.name();
+         if (a.action === "complete") r.completed = true; else R.delete(r);
+         return { id, title, ok: true };
+       } catch (e) { return { id, ok: false, error: String(e) }; }
+     }));`,
+    { ids, action },
+    60_000,
+  );
+  const done = results.filter((r) => r.ok);
+  const failed = results.filter((r) => !r.ok);
+  if (!done.length) throw new Error(`None of the reminders could be changed (${failed[0]?.error ?? "not found"}).`);
+  const verb = action === "complete" ? "Marked as done" : "Deleted";
+  return {
+    content: `${verb}: ${done.map((r) => `"${r.title}"`).join(", ")}.${failed.length ? ` ${failed.length} couldn't be changed.` : ""}`,
+    data: results,
+  };
+}
 
 const reminders: BuiltinCapability[] = [
   {
@@ -334,12 +426,12 @@ const reminders: BuiltinCapability[] = [
     risk: "low",
     summarize: (a) => `Look at your reminders${a.list ? ` in ${a.list}` : ""}`,
     async run(args) {
-      const items = await jxa<{ title: string; list: string; due?: string }[]>(
+      const items = await jxa<{ id: string; title: string; list: string; due?: string }[]>(
         "Reminders",
         `const R = Application("Reminders"); const out = [];
          const lists = a.list ? [R.lists.byName(a.list)] : R.lists();
          for (const l of lists) for (const r of l.reminders.whose({ completed: false })()) {
-           const due = r.dueDate(); out.push({ title: r.name(), list: l.name(), due: due ? due.toISOString() : undefined });
+           const due = r.dueDate(); out.push({ id: r.id(), title: r.name(), list: l.name(), due: due ? due.toISOString() : undefined });
            if (out.length >= 100) break;
          }
          return JSON.stringify(out);`,
@@ -347,8 +439,32 @@ const reminders: BuiltinCapability[] = [
         60_000,
       );
       if (!items.length) return { content: "No unfinished reminders.", data: [] };
-      return { content: items.map((r) => `${r.title} [${r.list}]${r.due ? ` — due ${when(r.due)}` : ""}`).join("\n"), data: items };
+      return { content: items.map((r) => `${r.title} [${r.list}]${r.due ? ` — due ${when(r.due)}` : ""} (id ${r.id})`).join("\n"), data: items };
     },
+  },
+  {
+    id: "reminders.complete",
+    service: "reminders",
+    title: "Mark reminders as done",
+    description: "Mark one or more reminders as completed. They stay in the Reminders app and can be un-ticked. Prefer this over deleting unless the user asked to delete. Get ids from reminders.list.",
+    inputSchema: idsSchema("Reminder ids from reminders.list"),
+    effects: ["write"],
+    risk: "medium",
+    summarize: async (a) => `Mark as done: ${await reminderTitles(strList(a, "ids"))}`,
+    run: (args) => changeReminders("complete", strList(args, "ids")),
+    verify: async (args) => (await reminderStates(strList(args, "ids"))).every((s) => s === "done"),
+  },
+  {
+    id: "reminders.delete",
+    service: "reminders",
+    title: "Delete reminders",
+    description: "Permanently delete one or more reminders. Only use when the user clearly asked to delete. Get ids from reminders.list.",
+    inputSchema: idsSchema("Reminder ids from reminders.list"),
+    effects: ["delete"],
+    risk: "high",
+    summarize: async (a) => `Permanently delete: ${await reminderTitles(strList(a, "ids"))}`,
+    run: (args) => changeReminders("delete", strList(args, "ids")),
+    verify: async (args) => (await reminderStates(strList(args, "ids"))).every((s) => s === "missing"),
   },
   {
     id: "reminders.create",
