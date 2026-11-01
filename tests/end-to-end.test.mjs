@@ -155,6 +155,17 @@ test("activity history is complete and tamper-evident", async () => {
   assert.equal(broken.brokenAt, 1);
 });
 
+test("recent files: by folder name, newest first; unknown folders are refused", async () => {
+  const { taskId } = await kernel.call("task.start", { intent: "recent" });
+  writeFileSync(join(docs, "newest.txt"), "new");
+  const d = await kernel.call("propose", { taskId, capability: "files.recent", args: { folder: "Documents", limit: 2 }, source: "agent" });
+  assert.equal(d.status, "executed");
+  assert.match(d.result.content.split("\n")[0], /newest\.txt/);
+  const outside = await kernel.call("propose", { taskId, capability: "files.recent", args: { folder: "Private" }, source: "agent" });
+  assert.equal(outside.status, "failed");
+  assert.match(outside.error, /No shared folder/);
+});
+
 test("vault never hands out service secrets", async () => {
   await kernel.call("vault.set", { name: "github.token", value: "s3cret" });
   await kernel.call("vault.set", { name: "model.cloud", value: "k" });
