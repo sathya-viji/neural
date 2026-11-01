@@ -191,6 +191,8 @@ function registerIpc(): void {
   handle("browser.close", () => (browser?.close(), {}));
   handle("browser.bounds", (b: { x: number; y: number; width: number; height: number }) => (browser?.setBounds(b), {}));
   handle("browser.state", () => browser?.state());
+  // The page panel keeps keyboard focus once clicked; the chat takes it back when it's clicked.
+  handle("app.focus", () => (win?.webContents.focus(), {}));
   handle("chatgpt.status", () => kernel.call("chatgpt.status", {}));
   handle("chatgpt.connect", async () => {
     const { url } = await kernel.call("chatgpt.connect", {});

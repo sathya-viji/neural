@@ -570,6 +570,9 @@ function onBrowserState(s) {
   requestAnimationFrame(sendBrowserBounds);
 }
 
+// Clicking anywhere in the app (not the page panel) gives the keyboard back to the app.
+document.addEventListener("mousedown", () => uab.call("app.focus"), true);
+
 $("#browser-form").addEventListener("submit", (e) => {
   e.preventDefault();
   uab.call("browser.go", $("#browser-url").value);
