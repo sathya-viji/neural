@@ -31,6 +31,8 @@ const handlers: Handlers = {
     kernel.emit("services.changed", services);
     return services;
   },
+  "services.signIn": ({ id }) => kernel.hub.signIn(id),
+  "services.signOut": async ({ id }) => (await kernel.hub.signOut(id), kernel.hub.services()),
   "task.start": ({ intent }) => ({ taskId: kernel.startTask(intent) }),
   "task.end": ({ taskId, summary }) => (kernel.endTask(taskId, summary), {}),
   "tasks.list": ({ limit }) => kernel.listTasks(limit),
@@ -68,6 +70,7 @@ const handlers: Handlers = {
 
 // Gmail connects and disconnects in the background (browser sign-in).
 gmail.onChange = () => kernel.emit("services.changed", kernel.hub.services());
+kernel.hub.onChange = () => kernel.emit("services.changed", kernel.hub.services());
 chatgpt.onChange = () => send({ jsonrpc: "2.0", method: "chatgpt.changed", params: chatgpt.status() });
 
 async function handle(req: RpcRequest): Promise<void> {

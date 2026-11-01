@@ -2,6 +2,8 @@ import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { McpSignIn } from "./mcp-signin.js";
 import type { ActionResult, Capability, Effect, Risk, ServiceInfo } from "@uab/protocol";
 import type { BuiltinCapability, ProviderContext } from "./builtin/types.js";
 import { fileCapabilities } from "./builtin/files.js";
@@ -19,8 +21,11 @@ interface ServicesConfig {
   mcpServers: Record<
     string,
     {
-      command: string;
+      /** A program on this computer… */
+      command?: string;
       args?: string[];
+      /** …or an online service. If it needs sign-in, the user signs in from Services. */
+      url?: string;
       env?: Record<string, string>;
       disabled?: boolean;
       /** Override how the kernel classifies a tool: { "tool_name": { effects, risk } } */
@@ -47,6 +52,8 @@ const BUILTIN_TITLES: Record<string, string> = {
 interface McpService {
   info: ServiceInfo;
   client?: Client;
+  signIn?: McpSignIn;
+  url?: string;
   capabilities: (Capability & { toolName: string })[];
 }
 
@@ -58,6 +65,8 @@ export class ServiceHub {
   private builtins = new Map<string, BuiltinCapability>();
   private mcp = new Map<string, McpService>();
   private configPath: string;
+  private pendingSignIn = new Map<string, () => void>();
+  onChange: () => void = () => {};
 
   constructor(private ctx: ProviderContext, private vault: Vault) {
     this.ctx = { ...ctx, vault };
@@ -80,14 +89,42 @@ export class ServiceHub {
     const service: McpService = {
       info: { id: `mcp.${id}`, title: id, kind: "mcp", status: "disabled", capabilityCount: 0 },
       capabilities: [],
+      url: def.url,
     };
     this.mcp.set(id, service);
     if (def.disabled) return;
     try {
-      const env = { ...getDefaultEnvironment(), ...(await this.vault.resolveRefs(def.env)) };
-      const transport = new StdioClientTransport({ command: def.command, args: def.args ?? [], env, stderr: "ignore" });
+      let transport;
+      if (def.url) {
+        service.signIn = await new McpSignIn(id, this.vault).load();
+        service.info.online = true;
+        service.info.signedIn = service.signIn.signedIn;
+        if (!service.signIn.signedIn) {
+          // Try without signing in first: some online services are open to everyone.
+          const open = await tryWithoutSignIn(def.url);
+          if (!open) {
+            service.info.status = "signin";
+            return;
+          }
+        }
+        transport = new StreamableHTTPClientTransport(new URL(def.url), { authProvider: service.signIn });
+      } else if (def.command) {
+        const env = { ...getDefaultEnvironment(), ...(await this.vault.resolveRefs(def.env)) };
+        transport = new StdioClientTransport({ command: def.command, args: def.args ?? [], env, stderr: "ignore" });
+      } else {
+        throw new Error('Add a "command" or a "url" for this service in services.json');
+      }
       const client = new Client({ name: "unified-ai-base-kernel", version: "0.1.0" });
-      await withTimeout(client.connect(transport), 30_000, `Timed out connecting to ${id}`);
+      try {
+        await withTimeout(client.connect(transport), 30_000, `Timed out connecting to ${id}`);
+      } catch (err) {
+        if (service.signIn && /unauthori[sz]ed/i.test(`${(err as Error).name} ${(err as Error).message}`)) {
+          client.close().catch(() => {});
+          service.info = { ...service.info, status: "signin", signedIn: false };
+          return;
+        }
+        throw err;
+      }
       const { tools } = await client.listTools();
       service.client = client;
       service.capabilities = tools.map((t) => {
@@ -104,11 +141,49 @@ export class ServiceHub {
           toolName: t.name,
         };
       });
-      service.info = { ...service.info, status: "connected", capabilityCount: service.capabilities.length };
+      service.info = { ...service.info, status: "connected", signedIn: service.signIn ? true : undefined, capabilityCount: service.capabilities.length };
     } catch (err) {
       service.info = { ...service.info, status: "error", error: (err as Error).message };
       process.stderr.write(`[kernel] service ${id}: ${(err as Error).message}\n`);
     }
+  }
+
+  private online(serviceId: string): [string, McpService] {
+    const id = serviceId.replace(/^mcp\./, "");
+    const service = this.mcp.get(id);
+    if (!service?.signIn || !service.url) throw new Error(`${id} isn't an online service`);
+    return [id, service];
+  }
+
+  /** Start signing in to an online service. Returns the service's sign-in page; finishes in the background. */
+  async signIn(serviceId: string): Promise<{ url: string }> {
+    const [id, service] = this.online(serviceId);
+    this.pendingSignIn.get(id)?.();
+    const { url, cancel } = await service.signIn!.start(service.url!, async (error) => {
+      this.pendingSignIn.delete(id);
+      const config = readJson<ServicesConfig>(this.configPath, { mcpServers: {} });
+      const def = config.mcpServers?.[id];
+      await this.mcp.get(id)?.client?.close().catch(() => {});
+      if (def) await this.connectOne(id, def);
+      const now = this.mcp.get(id);
+      if (error && now && now.info.status !== "connected") now.info.error = error;
+      this.onChange();
+    });
+    this.pendingSignIn.set(id, cancel);
+    service.info = { ...service.info, signingIn: true };
+    this.onChange();
+    return { url };
+  }
+
+  async signOut(serviceId: string): Promise<void> {
+    const [id, service] = this.online(serviceId);
+    this.pendingSignIn.get(id)?.();
+    await service.client?.close().catch(() => {});
+    await service.signIn!.signOut();
+    service.client = undefined;
+    service.capabilities = [];
+    service.info = { ...service.info, status: "signin", signedIn: false, signingIn: undefined, error: undefined, capabilityCount: 0 };
+    this.onChange();
   }
 
   async disconnect(): Promise<void> {
@@ -197,4 +272,20 @@ function classifyMcpTool(a?: { readOnlyHint?: boolean; destructiveHint?: boolean
 
 function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
   return Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), ms))]);
+}
+
+/** Does this online service answer without a sign-in? */
+async function tryWithoutSignIn(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 0, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "unified-ai-base-kernel", version: "0.1.0" } } }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    await res.body?.cancel();
+    return res.status !== 401 && res.status !== 403;
+  } catch {
+    return true; // Let the real connection report the problem.
+  }
 }

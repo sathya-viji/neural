@@ -196,7 +196,7 @@ async function tokenRequest(form: Record<string, string>): Promise<{ access_toke
   return { access_token: body.access_token, refresh_token: body.refresh_token, expires_in: body.expires_in ?? 3600 };
 }
 
-function page(ok: boolean, message: string): string {
+export function page(ok: boolean, message: string): string {
   const safe = message.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
   return `<!doctype html><meta charset="utf-8"><title>Unified AI Base</title>
 <body style="font:16px -apple-system,system-ui,sans-serif;display:grid;place-items:center;height:90vh;background:#14161a;color:#e8e9ec">

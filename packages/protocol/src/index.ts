@@ -44,9 +44,14 @@ export interface ServiceInfo {
   id: string;
   title: string;
   kind: "builtin" | "mcp";
-  status: "connected" | "error" | "disabled";
+  /** "signin": an online service that's waiting for the user to sign in. */
+  status: "connected" | "error" | "disabled" | "signin";
   error?: string;
   capabilityCount: number;
+  /** An online MCP service (reached over the internet, not a program on this computer). */
+  online?: boolean;
+  signedIn?: boolean;
+  signingIn?: boolean;
 }
 
 /** Who produced a proposal. The kernel treats all of them the same way. */
@@ -143,6 +148,8 @@ export interface KernelMethods {
   "capabilities.list": { params: {}; result: Capability[] };
   "services.list": { params: {}; result: ServiceInfo[] };
   "services.reload": { params: {}; result: ServiceInfo[] };
+  "services.signIn": { params: { id: string }; result: { url: string } };
+  "services.signOut": { params: { id: string }; result: ServiceInfo[] };
   "task.start": { params: { intent: string }; result: { taskId: string } };
   "task.end": { params: { taskId: string; summary: string }; result: {} };
   "tasks.list": { params: { limit?: number }; result: TaskRecord[] };

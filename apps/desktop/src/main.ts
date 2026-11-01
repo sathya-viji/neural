@@ -170,6 +170,14 @@ function registerIpc(): void {
 
   handle("services", () => kernel.call("services.list", {}));
   handle("services.reload", () => kernel.call("services.reload", {}));
+  handle("services.signIn", async (id: string) => {
+    const { url } = await kernel.call("services.signIn", { id: String(id) });
+    // The service's own sign-in page, in the user's normal browser.
+    if (!/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(url)) throw new Error("Unexpected sign-in address");
+    await shell.openExternal(url);
+    return {};
+  });
+  handle("services.signOut", (id: string) => kernel.call("services.signOut", { id: String(id) }));
   handle("services.edit", () => shell.openPath(join(kernelHome, "services.json")));
 
   handle("gmail.status", () => kernel.call("gmail.status", {}));

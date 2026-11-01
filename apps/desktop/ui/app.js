@@ -326,11 +326,31 @@ async function loadServices(list) {
       el(
         "div",
         { class: "service" },
-        el("div", {}, el("div", { class: "name" }, s.title), el("div", { class: "sub" }, `${s.kind === "builtin" ? "Built-in" : "MCP server"} · ${s.capabilityCount} capabilities`, s.error ? ` · ${s.error}` : "")),
-        el("div", {}, el("span", { class: `dot ${s.status === "connected" ? "ok" : s.status === "error" ? "bad" : ""}` }), s.status),
+        el("div", {}, el("div", { class: "name" }, s.title), el("div", { class: "sub" }, `${s.kind === "builtin" ? "Built-in" : s.online ? "Online MCP service" : "MCP server"} · ${s.capabilityCount} capabilities`, s.error ? ` · ${s.error}` : "")),
+        el(
+          "div",
+          { class: "service-actions" },
+          el("span", { class: `dot ${s.status === "connected" ? "ok" : s.status === "error" ? "bad" : ""}` }),
+          s.status === "signin" ? (s.signingIn ? "waiting for sign-in…" : "not signed in") : s.status,
+          s.online && (s.status === "signin" || s.status === "error") ? signInButton(s) : null,
+          s.online && s.signedIn ? el("button", { class: "ghost small", onclick: () => uab.call("services.signOut", s.id).then(loadServices) }, "Sign out") : null,
+        ),
       ),
     ),
   );
+}
+function signInButton(s) {
+  const b = el("button", { class: "primary small" }, s.signingIn ? "Start sign-in again" : "Sign in");
+  b.addEventListener("click", async () => {
+    b.disabled = true;
+    try {
+      await uab.call("services.signIn", s.id);
+    } catch (err) {
+      alert(String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ""));
+      b.disabled = false;
+    }
+  });
+  return b;
 }
 async function loadGmail() {
   const s = await uab.call("gmail.status");
