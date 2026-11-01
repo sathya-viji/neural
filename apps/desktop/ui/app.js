@@ -375,15 +375,53 @@ async function loadSettings() {
   $("#cloud-key").value = "";
   $("#cloud-key").placeholder = has.present ? "•••••••• saved in Keychain (type to replace)" : "Paste your API key";
   checkLocal();
-  if (has.present) checkCloud();
+  if (settings.cloud.kind === "chatgpt") loadChatGPT();
+  else if (has.present) checkCloud();
   else setCloudStatus("", "No API key yet.");
 }
 
 function showKind(kind) {
   $("#cloud-url-row").classList.toggle("hidden", kind !== "openai-compatible");
   $("#gemini-help").classList.toggle("hidden", kind !== "gemini");
-  $("#cloud-model").placeholder = kind === "gemini" ? "Picked automatically" : kind === "anthropic" ? "claude-sonnet-5-5" : "Model name";
+  $("#chatgpt-box").classList.toggle("hidden", kind !== "chatgpt");
+  // ChatGPT signs in instead of using a key.
+  $("#cloud-key").closest("label").classList.toggle("hidden", kind === "chatgpt");
+  $("#cloud-model").placeholder = kind === "gemini" || kind === "chatgpt" ? "Picked automatically" : kind === "anthropic" ? "claude-sonnet-5-5" : "Model name";
+  if (kind === "chatgpt") loadChatGPT();
 }
+
+/** Sign-in state and, once signed in, the models this ChatGPT account may use. */
+async function loadChatGPT() {
+  const s = await uab.call("chatgpt.status");
+  const state = $("#chatgpt-state");
+  $("#chatgpt-connect").classList.toggle("hidden", s.connected);
+  $("#chatgpt-disconnect").classList.toggle("hidden", !s.connected);
+  $("#chatgpt-connect").textContent = s.connecting ? "Start sign-in again" : "Sign in with ChatGPT";
+  state.className = `hint ${s.connected ? "ok" : s.error ? "bad" : ""}`;
+  state.textContent = s.connected
+    ? `Signed in${s.email ? ` as ${s.email}` : ""}.`
+    : s.connecting
+      ? "Finish signing in in your browser, then come back here."
+      : (s.error ?? "Not signed in.");
+  setCloudStatus("", "");
+  if (!s.connected) return;
+  try {
+    const models = await uab.call("chatgpt.models");
+    $("#cloud-models").replaceChildren(...models.map((m) => el("option", { value: m.slug, label: m.name })));
+    setCloudStatus("ok", `${models.length} models available: ${models.map((m) => m.name).join(", ")}. Leave Model empty to use ${models[0]?.name ?? "the default"}.`);
+  } catch (err) {
+    setCloudStatus("bad", String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, ""));
+  }
+}
+
+$("#chatgpt-connect").addEventListener("click", async () => {
+  await uab.call("chatgpt.connect").catch((err) => alert(err.message));
+  loadChatGPT();
+});
+$("#chatgpt-disconnect").addEventListener("click", async () => {
+  await uab.call("chatgpt.disconnect");
+  loadChatGPT();
+});
 
 function setCloudStatus(cls, text) {
   const status = $("#cloud-status");
@@ -447,6 +485,7 @@ async function checkLocal() {
 document.querySelectorAll("#model-mode button").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
 $("#local-url").addEventListener("change", checkLocal);
 $("#cloud-kind").addEventListener("change", () => {
+  if (settings) settings.cloud.kind = $("#cloud-kind").value;
   showKind($("#cloud-kind").value);
   $("#cloud-model").value = "";
   $("#cloud-models").replaceChildren();
@@ -487,6 +526,7 @@ uab.on((channel, payload) => {
   else if (channel === "approval.resolved") onApprovalResolved(payload);
   else if (channel === "audit.appended" && $("#view-activity").classList.contains("active")) loadActivity();
   else if (channel === "services.changed") loadServices(payload);
+  else if (channel === "chatgpt.changed" && settings?.cloud.kind === "chatgpt") loadChatGPT();
 });
 
 /* ---------------- start ---------------- */

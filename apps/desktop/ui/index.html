@@ -142,11 +142,20 @@
         <div class="card hidden" id="cloud-settings">
           <label>Provider
             <select id="cloud-kind">
+              <option value="chatgpt">ChatGPT (sign in with your Plus or Pro plan)</option>
               <option value="gemini">Google Gemini (free tier)</option>
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="openai-compatible">OpenAI-compatible</option>
             </select>
           </label>
+          <div id="chatgpt-box" class="hidden">
+            <div class="hint">Uses your ChatGPT Plus or Pro plan. No API key. Usage counts toward your plan's limits, and you can set a weekly limit for this app in ChatGPT. Your sign-in is kept by the kernel and never shared with the app window or the AI.</div>
+            <div class="row" style="margin-top: 10px">
+              <button class="primary" id="chatgpt-connect">Sign in with ChatGPT</button>
+              <button class="ghost hidden" id="chatgpt-disconnect">Sign out</button>
+              <span class="hint" id="chatgpt-state"></span>
+            </div>
+          </div>
           <div class="hint" id="gemini-help">Get a free key at <b>aistudio.google.com</b> → Get API key. No card needed. Free-tier requests may be used by Google to improve its models.</div>
           <label>Model <input id="cloud-model" list="cloud-models" placeholder="Picked automatically" /></label>
           <datalist id="cloud-models"></datalist>

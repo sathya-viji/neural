@@ -8,6 +8,7 @@ import { createInterface } from "node:readline";
 import type { KernelEvent, KernelMethods, RpcRequest } from "@uab/protocol";
 import { Kernel, KERNEL_VERSION } from "./kernel.js";
 import { gmail } from "./builtin/gmail.js";
+import { chatgpt } from "./chatgpt.js";
 
 type Handlers = { [M in keyof KernelMethods]: (params: KernelMethods[M]["params"]) => Promise<KernelMethods[M]["result"]> | KernelMethods[M]["result"] };
 
@@ -57,10 +58,17 @@ const handlers: Handlers = {
   "gmail.configure": async ({ clientId, clientSecret }) => (await gmail.configure(clientId, clientSecret), gmail.status()),
   "gmail.connect": () => gmail.connect(),
   "gmail.disconnect": async () => (await gmail.disconnect(), gmail.status()),
+  "chatgpt.status": () => chatgpt.status(),
+  "chatgpt.connect": () => chatgpt.connect(),
+  "chatgpt.disconnect": async () => (await chatgpt.disconnect(), chatgpt.status()),
+  "chatgpt.models": () => chatgpt.models(),
+  // The app sends the request; the kernel adds the user's ChatGPT credentials, which never leave it.
+  "chatgpt.respond": ({ body }) => chatgpt.respond(body),
 };
 
 // Gmail connects and disconnects in the background (browser sign-in).
 gmail.onChange = () => kernel.emit("services.changed", kernel.hub.services());
+chatgpt.onChange = () => send({ jsonrpc: "2.0", method: "chatgpt.changed", params: chatgpt.status() });
 
 async function handle(req: RpcRequest): Promise<void> {
   const handler = handlers[req.method as keyof Handlers] as ((p: unknown) => unknown) | undefined;
@@ -77,6 +85,7 @@ async function handle(req: RpcRequest): Promise<void> {
 }
 
 await kernel.start();
+await chatgpt.init(kernel.vault);
 process.stderr.write(`[kernel] ready (home ${kernel.home})\n`);
 send({ jsonrpc: "2.0", method: "kernel.ready", params: {} });
 

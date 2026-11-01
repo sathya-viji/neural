@@ -162,6 +162,19 @@ export interface KernelMethods {
   /** Returns Google's sign-in page for the host to open; sign-in completes in the background. */
   "gmail.connect": { params: {}; result: { url: string } };
   "gmail.disconnect": { params: {}; result: GmailStatus };
+  "chatgpt.status": { params: {}; result: ChatGPTStatus };
+  "chatgpt.connect": { params: {}; result: { url: string } };
+  "chatgpt.disconnect": { params: {}; result: ChatGPTStatus };
+  "chatgpt.models": { params: {}; result: { slug: string; name: string }[] };
+  /** A Responses API request on the user's ChatGPT plan. The kernel adds the credentials. */
+  "chatgpt.respond": { params: { body: Record<string, unknown> }; result: { output: unknown[] } };
+}
+
+export interface ChatGPTStatus {
+  connected: boolean;
+  email?: string;
+  connecting: boolean;
+  error?: string;
 }
 
 export interface GmailStatus {
@@ -178,6 +191,7 @@ export interface KernelEvents {
   "approval.resolved": { approvalId: string; approved: boolean };
   "audit.appended": AuditEntry;
   "services.changed": ServiceInfo[];
+  "chatgpt.changed": ChatGPTStatus;
 }
 
 export type KernelEvent = keyof KernelEvents;

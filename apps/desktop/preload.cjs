@@ -9,6 +9,7 @@ const CHANNELS = new Set([
   "audit", "audit.verify", "tasks",
   "services", "services.reload", "services.edit",
   "gmail.status", "gmail.configure", "gmail.connect", "gmail.disconnect", "gmail.guide",
+  "chatgpt.status", "chatgpt.connect", "chatgpt.disconnect", "chatgpt.models",
   "settings.get", "settings.set", "key.set", "key.has", "local.models", "cloud.models", "builtin.status",
   "reveal", "openHome",
 ]);

@@ -67,7 +67,7 @@ async function ask(text: string): Promise<void> {
   const key = settings.active === "cloud" ? (await kernel.call("vault.getModelKey", { name: "model.cloud" })).value : null;
   let gateway: Gateway;
   try {
-    gateway = new Gateway(kernel, createProvider(settings, key));
+    gateway = new Gateway(kernel, createProvider(settings, key, kernel));
   } catch (err) {
     send("gateway", { type: "error", message: (err as Error).message });
     send("gateway", { type: "done", text: (err as Error).message, taskId: "" });
@@ -164,7 +164,17 @@ function registerIpc(): void {
     return {};
   });
   handle("gmail.disconnect", () => kernel.call("gmail.disconnect", {}));
-  handle("gmail.guide", () => shell.openPath(join(appRoot, "..", "..", "docs", "gmail-setup.md")));
+  handle("chatgpt.status", () => kernel.call("chatgpt.status", {}));
+  handle("chatgpt.connect", async () => {
+    const { url } = await kernel.call("chatgpt.connect", {});
+    // Only OpenAI's own sign-in page, in the user's normal browser.
+    if (!url.startsWith("https://auth.openai.com/")) throw new Error("Unexpected sign-in address");
+    await shell.openExternal(url);
+    return {};
+  });
+  handle("chatgpt.disconnect", () => kernel.call("chatgpt.disconnect", {}));
+  handle("chatgpt.models", () => kernel.call("chatgpt.models", {}));
+  handle("gmail.guide",() => shell.openPath(join(appRoot, "..", "..", "docs", "gmail-setup.md")));
 
   handle("settings.get", () => loadSettings());
   handle("settings.set", async (s: ModelSettings) => {
@@ -217,7 +227,7 @@ async function startKernel(): Promise<void> {
     env: { ELECTRON_RUN_AS_NODE: "1" },
     onLog: (line) => console.log(line),
   });
-  const events: KernelEvent[] = ["approval.requested", "approval.resolved", "audit.appended", "services.changed"];
+  const events: KernelEvent[] = ["approval.requested", "approval.resolved", "audit.appended", "services.changed", "chatgpt.changed"];
   for (const e of events) kernel.on(e, (payload) => send(e, payload));
   kernel.on("exit", (code) => {
     if (!app.isReady() || quitting) return;

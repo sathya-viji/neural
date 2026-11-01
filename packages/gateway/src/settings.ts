@@ -1,9 +1,12 @@
 import { AnthropicProvider } from "./providers/anthropic.js";
 import { OpenAICompatibleProvider } from "./providers/openai.js";
 import { AppleOnDeviceProvider } from "./providers/apple.js";
+import { ChatGPTPlanProvider } from "./providers/chatgpt.js";
 import type { ModelProvider } from "./providers/types.js";
+import type { KernelCaller } from "./gateway.js";
 
-export type CloudKind = "gemini" | "anthropic" | "openai-compatible";
+/** chatgpt: the user's ChatGPT plan via sign-in (no key). The others use an API key. */
+export type CloudKind = "chatgpt" | "gemini" | "anthropic" | "openai-compatible";
 
 /** Which model the user picked. Models are replaceable; this is the only place that knows them. */
 export interface ModelSettings {
@@ -31,7 +34,7 @@ export function describeModelSettings(s: ModelSettings): string {
 }
 
 export function cloudDefaultModel(kind: CloudKind): string {
-  return kind === "gemini" ? GEMINI_FALLBACK_MODEL : kind === "anthropic" ? "claude-sonnet-5-5" : "";
+  return kind === "gemini" ? GEMINI_FALLBACK_MODEL : kind === "anthropic" ? "claude-sonnet-5-5" : kind === "chatgpt" ? "ChatGPT" : "";
 }
 
 /** Where a cloud provider lists its models (OpenAI-style GET /models). */
@@ -78,9 +81,16 @@ export function pickGeminiModel(ids: string[]): string {
   return rankGeminiModels(ids)[0] ?? GEMINI_FALLBACK_MODEL;
 }
 
-/** The cloud API key is fetched from the kernel's vault by the caller. */
-export function createProvider(s: ModelSettings, cloudKey: string | null): ModelProvider {
+/**
+ * The cloud API key is fetched from the kernel's vault by the caller. ChatGPT
+ * needs no key here: requests go through the kernel, which holds the sign-in.
+ */
+export function createProvider(s: ModelSettings, cloudKey: string | null, kernel?: KernelCaller): ModelProvider {
   if (s.active === "builtin") return new AppleOnDeviceProvider();
+  if (s.active === "cloud" && s.cloud.kind === "chatgpt") {
+    if (!kernel) throw new Error("ChatGPT needs the kernel connection.");
+    return new ChatGPTPlanProvider(kernel, s.cloud.model);
+  }
   if (s.active === "local") {
     return new OpenAICompatibleProvider({ baseUrl: s.local.baseUrl, model: s.local.model, label: `${s.local.model} (local)`, locality: "local" });
   }

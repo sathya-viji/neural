@@ -65,8 +65,10 @@ npm run cli -- "find the q3 report and email it to sam"
 
 ### Pick a model
 
-- **Local (default):** install [Ollama](https://ollama.com), then run `ollama pull qwen3:8b`. Any OpenAI-compatible local server also works (LM Studio, llama.cpp).
-- **Cloud:** go to Settings → Cloud, choose Anthropic or OpenAI-compatible, and paste your API key (it's stored in the Keychain).
+- **Built-in (default):** on Macs with Apple Intelligence, the app uses Apple's on-device model. No key, no account, nothing leaves the Mac.
+- **Sign in with ChatGPT:** Settings → Cloud → ChatGPT → *Sign in with ChatGPT*. Uses your ChatGPT Plus or Pro plan; no API key. The kernel keeps the sign-in and makes the requests itself, so the token never leaves it. (OpenAI's flow for open-source, locally hosted apps.)
+- **Local server:** install [Ollama](https://ollama.com), then run `ollama pull qwen3:8b`. Any OpenAI-compatible local server also works (LM Studio, llama.cpp).
+- **API key:** Settings → Cloud → Gemini, Anthropic or OpenAI-compatible, then paste your key (it's stored in the Keychain).
 
 ## Your data
 
