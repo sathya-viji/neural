@@ -309,13 +309,13 @@ async function loadGmail() {
   $("#gmail-setup").classList.toggle("hidden", s.configured && !showGmailSetup);
   $("#gmail-connect").classList.toggle("hidden", !s.configured || s.connected);
   $("#gmail-disconnect").classList.toggle("hidden", !s.connected);
-  $("#gmail-connect").disabled = s.connecting;
-  $("#gmail-connect").textContent = s.connecting ? "Waiting for Google…" : "Connect Gmail";
+  // Never a dead end: if Google shows an error page it never comes back, so let the user start over.
+  $("#gmail-connect").textContent = s.connecting ? "Start sign-in again" : "Connect Gmail";
   state.className = `hint ${s.connected ? "ok" : ""}`;
   state.textContent = s.connected
     ? `Connected as ${s.email}. The AI can search, read, draft and send (sending always asks first).`
     : s.connecting
-      ? "Finish signing in in your browser, then come back here."
+      ? "Finish signing in in your browser, then come back here. If Google showed an error, fix it and click \"Start sign-in again\"."
       : s.configured
         ? "Ready to connect. You'll sign in on Google's own page."
         : "Not set up yet.";
