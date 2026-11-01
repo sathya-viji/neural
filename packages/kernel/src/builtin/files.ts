@@ -6,7 +6,8 @@ import type { BuiltinCapability, ProviderContext } from "./types.js";
 import { str } from "./types.js";
 
 const run = promisify(execFile);
-const SKIP = new Set(["node_modules", "Library", ".git", ".Trash"]);
+// Folders full of generated files that people never mean when they ask for "the report".
+const SKIP = new Set(["node_modules", "Library", ".git", ".Trash", "build", "dist", "Pods", "DerivedData", "vendor", "__pycache__", "venv", "target"]);
 const TEXT = new Set([".txt", ".md", ".csv", ".json", ".log", ".yaml", ".yml", ".xml", ".html", ".ts", ".js", ".py"]);
 const CONVERTIBLE = new Set([".doc", ".docx", ".rtf", ".rtfd", ".odt", ".webarchive"]);
 

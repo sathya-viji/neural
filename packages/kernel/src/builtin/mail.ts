@@ -20,7 +20,7 @@ export const mailCapabilities: BuiltinCapability[] = [
   {
     id: "mail.send",
     service: "mail",
-    title: "Send an email (local outbox)",
+    title: "Save an email to the outbox (demo, not delivered)",
     description:
       "Send an email, optionally with file attachments from the shared folders. This built-in service saves the message to the local outbox as an .eml file; it is not delivered over the internet.",
     inputSchema: {
@@ -38,7 +38,7 @@ export const mailCapabilities: BuiltinCapability[] = [
     summarize(a) {
       const to = strList(a, "to").join(", ");
       const files = strList(a, "attachments").map((p) => basename(p));
-      return `Email ${to} — "${a.subject}"${files.length ? ` with ${files.join(", ")}` : ""}`;
+      return `Save an email to ${to} in the outbox — "${a.subject}"${files.length ? ` with ${files.join(", ")}` : ""} (not delivered)`;
     },
     async run(args, ctx) {
       const to = strList(args, "to");
@@ -84,7 +84,7 @@ export const mailCapabilities: BuiltinCapability[] = [
       const file = join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${id.slice(0, 8)}.eml`);
       await writeFile(file, parts.join("\r\n"), { mode: 0o600 });
       return {
-        content: `Saved to the local outbox for ${to.join(", ")}${attachments.length ? ` with ${attachments.length} attachment(s)` : ""}. File: ${file}`,
+        content: `NOT delivered: this demo mail service only saves messages on this computer. The message for ${to.join(", ")}${attachments.length ? ` with ${attachments.length} attachment(s)` : ""} was saved to the local outbox at ${file}. Tell the user it was saved to the outbox, not sent.`,
         data: { file, to, attachments },
       };
     },

@@ -81,7 +81,7 @@ export class Gateway {
             args: call.args,
             reason: reply.text.trim() || undefined,
             source: this.provider.locality === "local" ? "local-model" : "cloud-model",
-            model: this.provider.id,
+            model: this.provider.label,
           });
           emit({ type: "decision", callId: call.id, capability: cap, decision });
           messages.push({ role: "tool", callId: call.id, name: call.name, content: describe(decision) });
