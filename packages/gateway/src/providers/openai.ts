@@ -10,7 +10,17 @@ export interface OpenAICompatibleOptions {
   locality?: "local" | "cloud";
   /** Some servers (Gemini) accept only a subset of JSON Schema in tool definitions. */
   strictSchemas?: boolean;
+  /** Models to switch to when the main one is overloaded or not answering. */
+  fallbackModels?: string[];
+  /** Give up on one attempt after this long. */
+  timeoutMs?: number;
 }
+
+/** Models that recently said they were overloaded, and when to try them again. Shared by all requests. */
+const busyUntil = new Map<string, number>();
+const BUSY_FOR_MS = 10 * 60 * 1000;
+
+class RetryableError extends ProviderError {}
 
 /**
  * Any server that speaks the OpenAI chat-completions format with tools:
@@ -28,16 +38,45 @@ export class OpenAICompatibleProvider implements ModelProvider {
     this.label = options.label ?? options.model;
   }
 
+  /** The model that answered last; later turns of the same task stay on it. */
+  private current?: string;
+
   async chat(req: ChatRequest): Promise<ChatResponse> {
+    const all = [this.options.model, ...(this.options.fallbackModels ?? [])];
+    const now = Date.now();
+    const candidates = this.current ? [this.current, ...all.filter((m) => m !== this.current)] : all;
+    const ready = candidates.filter((m) => (busyUntil.get(m) ?? 0) < now);
+    const order = ready.length ? ready : candidates;
+
+    let last: Error | undefined;
+    for (const model of order) {
+      try {
+        const reply = await this.attempt(model, req);
+        this.current = model;
+        return reply;
+      } catch (err) {
+        if (!(err instanceof RetryableError) || req.signal?.aborted) throw err;
+        busyUntil.set(model, Date.now() + BUSY_FOR_MS);
+        last = err;
+      }
+    }
+    throw new ProviderError(
+      order.length > 1 ? `All ${order.length} models are busy or not answering right now. Try again in a minute. (${last?.message})` : (last?.message ?? "No answer"),
+    );
+  }
+
+  private async attempt(model: string, req: ChatRequest): Promise<ChatResponse> {
+    const timeout = AbortSignal.timeout(this.options.timeoutMs ?? (this.locality === "local" ? 180_000 : 30_000));
+    const signal = req.signal ? AbortSignal.any([req.signal, timeout]) : timeout;
     const res = await fetch(`${this.options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
-      signal: req.signal,
+      signal,
       headers: {
         "content-type": "application/json",
         ...(this.options.apiKey ? { authorization: `Bearer ${this.options.apiKey}` } : {}),
       },
       body: JSON.stringify({
-        model: this.options.model,
+        model,
         messages: [{ role: "system", content: req.system }, ...toOpenAI(req.messages)],
         tools: req.tools.map((t) => ({
           type: "function",
@@ -45,9 +84,15 @@ export class OpenAICompatibleProvider implements ModelProvider {
         })),
       }),
     }).catch((err: Error) => {
+      if (req.signal?.aborted) throw err;
+      if (timeout.aborted) throw new RetryableError(`${model} didn't answer in time`);
       throw new ProviderError(`Can't reach ${this.options.baseUrl} (${err.message}). Is the model server running?`);
     });
-    if (!res.ok) throw new ProviderError(`${this.label} ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) {
+      const text = (await res.text()).slice(0, 300);
+      if (res.status === 429 || res.status >= 500) throw new RetryableError(`${model} ${res.status}: ${text}`);
+      throw new ProviderError(`${model} ${res.status}: ${text}`);
+    }
     const body = (await res.json()) as {
       choices: {
         message: {

@@ -12,6 +12,7 @@ export {
   cloudDefaultModel,
   cloudModelsUrl,
   pickGeminiModel,
+  rankGeminiModels,
   GEMINI_BASE_URL,
 } from "./settings.js";
 export type { ModelSettings, CloudKind } from "./settings.js";

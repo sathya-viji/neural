@@ -8,11 +8,11 @@ export type CloudKind = "gemini" | "anthropic" | "openai-compatible";
 export interface ModelSettings {
   active: "local" | "cloud";
   local: { baseUrl: string; model: string };
-  cloud: { kind: CloudKind; model: string; baseUrl?: string };
+  cloud: { kind: CloudKind; model: string; baseUrl?: string; fallbacks?: string[] };
 }
 
 export const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
-export const GEMINI_FALLBACK_MODEL = "gemini-2.5-flash";
+export const GEMINI_FALLBACK_MODEL = "gemini-flash-latest";
 
 export function defaultModelSettings(): ModelSettings {
   return {
@@ -37,11 +37,18 @@ export function cloudModelsUrl(s: ModelSettings["cloud"]): string | null {
   return null;
 }
 
-/** From a Gemini model list, pick the newest plain "flash" model: fast, capable and on the free tier. */
+/**
+ * From a Gemini model list, rank the plain "flash" models (fast, capable, on the free tier),
+ * newest first, then the "flash-lite" ones as a last resort.
+ */
+export function rankGeminiModels(ids: string[]): string[] {
+  const version = (id: string, suffix: string) => parseFloat(id.match(new RegExp(`^gemini-(\\d+(?:\\.\\d+)?)-${suffix}$`))?.[1] ?? "0");
+  const byVersion = (suffix: string) => ids.filter((id) => version(id, suffix) > 0).sort((a, b) => version(b, suffix) - version(a, suffix));
+  return [...byVersion("flash"), ...byVersion("flash-lite")];
+}
+
 export function pickGeminiModel(ids: string[]): string {
-  const version = (id: string) => parseFloat(id.match(/^gemini-(\d+(?:\.\d+)?)-flash$/)?.[1] ?? "0");
-  const flash = ids.filter((id) => version(id) > 0).sort((a, b) => version(b) - version(a));
-  return flash[0] ?? GEMINI_FALLBACK_MODEL;
+  return rankGeminiModels(ids)[0] ?? GEMINI_FALLBACK_MODEL;
 }
 
 /** The cloud API key is fetched from the kernel's vault by the caller. */
@@ -59,6 +66,7 @@ export function createProvider(s: ModelSettings, cloudKey: string | null): Model
       label: `Gemini (${model})`,
       locality: "cloud",
       strictSchemas: true,
+      fallbackModels: (s.cloud.fallbacks ?? []).filter((m) => m !== model),
     });
   }
   if (s.cloud.kind === "anthropic") return new AnthropicProvider({ apiKey: cloudKey, model, baseUrl: s.cloud.baseUrl });

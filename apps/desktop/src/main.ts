@@ -16,6 +16,7 @@ import {
   defaultModelSettings,
   describeModelSettings,
   pickGeminiModel,
+  rankGeminiModels,
   type Message,
   type ModelSettings,
 } from "@uab/gateway";
@@ -152,10 +153,17 @@ function registerIpc(): void {
 
   handle("settings.get", () => loadSettings());
   handle("settings.set", async (s: ModelSettings) => {
-    // No model chosen for Gemini: pick the best free-tier one this key can use.
-    if (s.active === "cloud" && s.cloud.kind === "gemini" && !s.cloud.model) {
+    // Gemini: pick the best free-tier model this key can use (unless the user chose one)
+    // and keep a few others to fall back on when it's overloaded.
+    if (s.cloud.kind === "gemini") {
       const listed = await listCloudModels(s.cloud);
-      if (listed.ok) s.cloud.model = pickGeminiModel(listed.models);
+      if (listed.ok) {
+        const ranked = rankGeminiModels(listed.models);
+        if (!s.cloud.model) s.cloud.model = pickGeminiModel(listed.models);
+        s.cloud.fallbacks = ranked.filter((m) => m !== s.cloud.model).slice(0, 4);
+      }
+    } else {
+      delete s.cloud.fallbacks;
     }
     saveSettings(s);
     return { model: describeModelSettings(s), settings: s };
