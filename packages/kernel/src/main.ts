@@ -7,6 +7,7 @@
 import { createInterface } from "node:readline";
 import type { KernelEvent, KernelMethods, RpcRequest } from "@uab/protocol";
 import { Kernel, KERNEL_VERSION } from "./kernel.js";
+import { gmail } from "./builtin/gmail.js";
 
 type Handlers = { [M in keyof KernelMethods]: (params: KernelMethods[M]["params"]) => Promise<KernelMethods[M]["result"]> | KernelMethods[M]["result"] };
 
@@ -52,7 +53,14 @@ const handlers: Handlers = {
     if (!name.startsWith("model.")) throw new Error("Only model keys can be read from outside the kernel");
     return { value: await kernel.vault.get(name) };
   },
+  "gmail.status": () => gmail.status(),
+  "gmail.configure": async ({ clientId, clientSecret }) => (await gmail.configure(clientId, clientSecret), gmail.status()),
+  "gmail.connect": () => gmail.connect(),
+  "gmail.disconnect": async () => (await gmail.disconnect(), gmail.status()),
 };
+
+// Gmail connects and disconnects in the background (browser sign-in).
+gmail.onChange = () => kernel.emit("services.changed", kernel.hub.services());
 
 async function handle(req: RpcRequest): Promise<void> {
   const handler = handlers[req.method as keyof Handlers] as ((p: unknown) => unknown) | undefined;

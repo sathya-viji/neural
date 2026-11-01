@@ -157,6 +157,18 @@ export interface KernelMethods {
   "vault.set": { params: { name: string; value: string }; result: {} };
   "vault.has": { params: { name: string }; result: { present: boolean } };
   "vault.getModelKey": { params: { name: string }; result: { value: string | null } };
+  "gmail.status": { params: {}; result: GmailStatus };
+  "gmail.configure": { params: { clientId: string; clientSecret: string }; result: GmailStatus };
+  /** Returns Google's sign-in page for the host to open; sign-in completes in the background. */
+  "gmail.connect": { params: {}; result: { url: string } };
+  "gmail.disconnect": { params: {}; result: GmailStatus };
+}
+
+export interface GmailStatus {
+  configured: boolean;
+  connected: boolean;
+  email?: string;
+  connecting: boolean;
 }
 
 export type KernelMethod = keyof KernelMethods;

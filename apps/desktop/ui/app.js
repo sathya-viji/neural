@@ -23,7 +23,7 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-const SERVICE_NAMES = { files: "Files", contacts: "Contacts", mail: "Mail", calendar: "Calendar", reminders: "Reminders", system: "This computer" };
+const SERVICE_NAMES = { files: "Files", contacts: "Contacts", mail: "Apple Mail", gmail: "Gmail", calendar: "Calendar", reminders: "Reminders", system: "This computer" };
 const serviceName = (id) => SERVICE_NAMES[id] ?? id.replace(/^mcp\./, "");
 
 /* ---------------- navigation ---------------- */
@@ -290,6 +290,7 @@ $("#add-root").addEventListener("click", async () => (await uab.call("roots.add"
 /* ---------------- Services ---------------- */
 
 async function loadServices(list) {
+  loadGmail();
   const services = list ?? (await uab.call("services"));
   $("#services-list").replaceChildren(
     ...services.map((s) =>
@@ -302,6 +303,49 @@ async function loadServices(list) {
     ),
   );
 }
+async function loadGmail() {
+  const s = await uab.call("gmail.status");
+  const state = $("#gmail-state");
+  $("#gmail-setup").classList.toggle("hidden", s.configured && !showGmailSetup);
+  $("#gmail-connect").classList.toggle("hidden", !s.configured || s.connected);
+  $("#gmail-disconnect").classList.toggle("hidden", !s.connected);
+  $("#gmail-connect").disabled = s.connecting;
+  $("#gmail-connect").textContent = s.connecting ? "Waiting for Google…" : "Connect Gmail";
+  state.className = `hint ${s.connected ? "ok" : ""}`;
+  state.textContent = s.connected
+    ? `Connected as ${s.email}. The AI can search, read, draft and send (sending always asks first).`
+    : s.connecting
+      ? "Finish signing in in your browser, then come back here."
+      : s.configured
+        ? "Ready to connect. You'll sign in on Google's own page."
+        : "Not set up yet.";
+}
+let showGmailSetup = false;
+
+$("#gmail-save").addEventListener("click", async () => {
+  const status = $("#gmail-setup-status");
+  try {
+    await uab.call("gmail.configure", $("#gmail-client-id").value, $("#gmail-client-secret").value);
+    $("#gmail-client-secret").value = "";
+    status.className = "hint ok";
+    status.textContent = "Saved.";
+    showGmailSetup = false;
+    loadGmail();
+  } catch (err) {
+    status.className = "hint bad";
+    status.textContent = String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
+  }
+});
+$("#gmail-connect").addEventListener("click", async () => {
+  await uab.call("gmail.connect").catch((err) => alert(err.message));
+  loadGmail();
+});
+$("#gmail-disconnect").addEventListener("click", async () => {
+  await uab.call("gmail.disconnect");
+  loadGmail();
+});
+$("#gmail-guide").addEventListener("click", () => uab.call("gmail.guide"));
+
 $("#edit-services").addEventListener("click", () => uab.call("services.edit"));
 $("#reload-services").addEventListener("click", async (e) => {
   e.target.disabled = true;

@@ -9,6 +9,7 @@ import { contactCapabilities } from "./builtin/contacts.js";
 import { mailCapabilities } from "./builtin/mail.js";
 import { systemCapabilities } from "./builtin/system.js";
 import { appleCapabilities } from "./builtin/apple.js";
+import { gmail, gmailCapabilities } from "./builtin/gmail.js";
 import { readJson, writeJson } from "./store.js";
 import type { Vault } from "./vault.js";
 
@@ -36,6 +37,7 @@ const BUILTIN_TITLES: Record<string, string> = {
   mail: useAppleApps ? "Apple Mail" : "Mail (local outbox)",
   calendar: "Calendar",
   reminders: "Reminders",
+  gmail: "Gmail",
   system: "This computer",
 };
 
@@ -56,7 +58,7 @@ export class ServiceHub {
 
   constructor(private ctx: ProviderContext, private vault: Vault) {
     const personal = useAppleApps ? appleCapabilities : [...contactCapabilities, ...mailCapabilities];
-    for (const cap of [...fileCapabilities, ...personal, ...systemCapabilities]) {
+    for (const cap of [...fileCapabilities, ...personal, ...gmailCapabilities, ...systemCapabilities]) {
       this.builtins.set(cap.id, cap);
     }
     this.configPath = join(ctx.home, "services.json");
@@ -64,6 +66,7 @@ export class ServiceHub {
   }
 
   async connect(): Promise<void> {
+    await gmail.init(this.vault);
     await this.disconnect();
     const config = readJson<ServicesConfig>(this.configPath, { mcpServers: {} });
     await Promise.all(Object.entries(config.mcpServers ?? {}).map(([id, def]) => this.connectOne(id, def)));
@@ -114,9 +117,9 @@ export class ServiceHub {
     for (const c of this.builtins.values()) counts.set(c.service, (counts.get(c.service) ?? 0) + 1);
     const builtin: ServiceInfo[] = [...counts].map(([id, n]) => ({
       id,
-      title: BUILTIN_TITLES[id] ?? id,
+      title: id === "gmail" && gmail.connected ? `Gmail (${gmail.status().email})` : (BUILTIN_TITLES[id] ?? id),
       kind: "builtin",
-      status: "connected",
+      status: id === "gmail" && !gmail.connected ? "disabled" : "connected",
       capabilityCount: n,
     }));
     return [...builtin, ...[...this.mcp.values()].map((s) => s.info)];
@@ -127,7 +130,7 @@ export class ServiceHub {
       id, service, title, description, inputSchema, effects, risk,
     });
     return [
-      ...[...this.builtins.values()].map(strip),
+      ...[...this.builtins.values()].filter((c) => c.available?.() ?? true).map(strip),
       ...[...this.mcp.values()].flatMap((s) => s.capabilities.map(strip)),
     ];
   }
@@ -156,6 +159,7 @@ export class ServiceHub {
   async execute(id: string, args: Record<string, unknown>): Promise<{ result: ActionResult; verified: boolean }> {
     const builtin = this.builtins.get(id);
     if (builtin) {
+      if (builtin.available && !builtin.available()) throw new Error(`${BUILTIN_TITLES[builtin.service] ?? builtin.service} isn't connected`);
       const result = await builtin.run(args, this.ctx);
       const verified = builtin.verify ? await builtin.verify(args, result, this.ctx) : true;
       return { result, verified };

@@ -8,6 +8,8 @@ export interface ProviderContext {
 /** A capability implemented inside the kernel process itself. */
 export interface BuiltinCapability extends Capability {
   run(args: Record<string, unknown>, ctx: ProviderContext): Promise<ActionResult>;
+  /** Offered to models only while this returns true (e.g. an account is connected). */
+  available?(): boolean;
   /** Check the action really happened. Absent means "trust the result". */
   verify?(args: Record<string, unknown>, result: ActionResult, ctx: ProviderContext): Promise<boolean>;
   /**

@@ -8,6 +8,7 @@ const CHANNELS = new Set([
   "capabilities", "policy.get", "policy.set", "roots.add", "roots.remove",
   "audit", "audit.verify", "tasks",
   "services", "services.reload", "services.edit",
+  "gmail.status", "gmail.configure", "gmail.connect", "gmail.disconnect", "gmail.guide",
   "settings.get", "settings.set", "key.set", "key.has", "local.models", "cloud.models",
   "reveal", "openHome",
 ]);

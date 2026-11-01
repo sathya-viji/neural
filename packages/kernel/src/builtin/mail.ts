@@ -1,20 +1,15 @@
-import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
+import { mkdir, writeFile, stat } from "node:fs/promises";
 import { join, basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { BuiltinCapability } from "./types.js";
 import { str, strList } from "./types.js";
 import { insideRoots } from "./files.js";
-
-const EMAIL = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
-
-function wrap64(b64: string): string {
-  return b64.replace(/.{1,76}/g, "$&\r\n");
-}
+import { buildMime, checkRecipients } from "./mime.js";
 
 /**
  * A local outbox: messages are written as standard .eml files that any mail
- * app can open. Nothing leaves the machine. Connect a real mail service
- * through MCP (Services tab) to deliver mail for real.
+ * app can open. Nothing leaves the machine. Used for tests and on systems
+ * without a real mail service connected.
  */
 export const mailCapabilities: BuiltinCapability[] = [
   {
@@ -42,47 +37,21 @@ export const mailCapabilities: BuiltinCapability[] = [
     },
     async run(args, ctx) {
       const to = strList(args, "to");
-      if (!to.length) throw new Error("At least one recipient is required");
-      for (const addr of to) if (!EMAIL.test(addr)) throw new Error(`"${addr}" is not an email address`);
-      const subject = str(args, "subject");
-      const body = str(args, "body");
+      checkRecipients(to);
       const attachments = await Promise.all(strList(args, "attachments").map((p) => insideRoots(p, ctx)));
-
-      const boundary = `uab-${randomUUID()}`;
-      const id = randomUUID();
-      const parts = [
-        `From: me@localhost`,
-        `To: ${to.join(", ")}`,
-        `Subject: ${subject.replace(/[\r\n]/g, " ")}`,
-        `Date: ${new Date().toUTCString()}`,
-        `Message-ID: <${id}@unified-ai-base.local>`,
-        `X-Unsent: 1`,
-        `MIME-Version: 1.0`,
-        `Content-Type: multipart/mixed; boundary="${boundary}"`,
-        ``,
-        `--${boundary}`,
-        `Content-Type: text/plain; charset=utf-8`,
-        `Content-Transfer-Encoding: base64`,
-        ``,
-        wrap64(Buffer.from(body, "utf8").toString("base64")),
-      ];
-      for (const path of attachments) {
-        const name = basename(path).replace(/"/g, "");
-        parts.push(
-          `--${boundary}`,
-          `Content-Type: application/octet-stream; name="${name}"`,
-          `Content-Disposition: attachment; filename="${name}"`,
-          `Content-Transfer-Encoding: base64`,
-          ``,
-          wrap64((await readFile(path)).toString("base64")),
-        );
-      }
-      parts.push(`--${boundary}--`, ``);
+      const raw = await buildMime({
+        from: "me@localhost",
+        to,
+        subject: str(args, "subject"),
+        body: str(args, "body"),
+        attachments,
+        extraHeaders: { "X-Unsent": "1" },
+      });
 
       const dir = join(ctx.home, "outbox");
       await mkdir(dir, { recursive: true });
-      const file = join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${id.slice(0, 8)}.eml`);
-      await writeFile(file, parts.join("\r\n"), { mode: 0o600 });
+      const file = join(dir, `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}.eml`);
+      await writeFile(file, raw, { mode: 0o600 });
       return {
         content: `NOT delivered: this demo mail service only saves messages on this computer. The message for ${to.join(", ")}${attachments.length ? ` with ${attachments.length} attachment(s)` : ""} was saved to the local outbox at ${file}. Tell the user it was saved to the outbox, not sent.`,
         data: { file, to, attachments },

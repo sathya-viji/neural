@@ -153,6 +153,18 @@ function registerIpc(): void {
   handle("services.reload", () => kernel.call("services.reload", {}));
   handle("services.edit", () => shell.openPath(join(kernelHome, "services.json")));
 
+  handle("gmail.status", () => kernel.call("gmail.status", {}));
+  handle("gmail.configure", (clientId: string, clientSecret: string) => kernel.call("gmail.configure", { clientId: String(clientId), clientSecret: String(clientSecret) }));
+  handle("gmail.connect", async () => {
+    const { url } = await kernel.call("gmail.connect", {});
+    // Only Google's sign-in page, in the user's normal browser.
+    if (!url.startsWith("https://accounts.google.com/")) throw new Error("Unexpected sign-in address");
+    await shell.openExternal(url);
+    return {};
+  });
+  handle("gmail.disconnect", () => kernel.call("gmail.disconnect", {}));
+  handle("gmail.guide", () => shell.openPath(join(appRoot, "..", "..", "docs", "gmail-setup.md")));
+
   handle("settings.get", () => loadSettings());
   handle("settings.set", async (s: ModelSettings) => {
     // Gemini: pick the best free-tier model this key can use (unless the user chose one)

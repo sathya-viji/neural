@@ -166,6 +166,14 @@ test("recent files: by folder name, newest first; unknown folders are refused", 
   assert.match(outside.error, /No shared folder/);
 });
 
+test("Gmail isn't offered to the AI until it's connected", async () => {
+  const caps = await kernel.call("capabilities.list", {});
+  assert.ok(!caps.some((c) => c.service === "gmail"));
+  const status = await kernel.call("gmail.status", {});
+  assert.deepEqual({ configured: status.configured, connected: status.connected }, { configured: false, connected: false });
+  await assert.rejects(kernel.call("gmail.configure", { clientId: "nope", clientSecret: "x" }), /Client ID/);
+});
+
 test("vault never hands out service secrets", async () => {
   await kernel.call("vault.set", { name: "github.token", value: "s3cret" });
   await kernel.call("vault.set", { name: "model.cloud", value: "k" });

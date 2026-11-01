@@ -81,6 +81,26 @@
             <button class="ghost" id="reload-services">Reconnect</button>
           </div>
         </header>
+        <h2>Accounts</h2>
+        <div class="card account" id="gmail-card">
+          <div class="row" style="justify-content: space-between">
+            <div>
+              <div class="name">Gmail</div>
+              <div class="hint" id="gmail-state">Checking…</div>
+            </div>
+            <div class="row">
+              <button class="primary hidden" id="gmail-connect">Connect Gmail</button>
+              <button class="ghost hidden" id="gmail-disconnect">Disconnect</button>
+            </div>
+          </div>
+          <div id="gmail-setup" class="hidden">
+            <p class="hint">One-time setup: register this app with Google and paste its OAuth client here. <button class="link" id="gmail-guide">Open the step-by-step guide</button></p>
+            <label>Client ID <input id="gmail-client-id" placeholder="…apps.googleusercontent.com" /></label>
+            <label>Client secret <input id="gmail-client-secret" type="password" placeholder="Stored in your Keychain" /></label>
+            <div class="row"><button class="primary" id="gmail-save">Save</button><span class="hint" id="gmail-setup-status"></span></div>
+          </div>
+        </div>
+        <h2>Connected services</h2>
         <p class="lede">Services give the AI things it can do. Built-in services run inside the kernel. Add any MCP server in <code>services.json</code>, using the same format as other MCP apps. Secrets can be referenced as <code>"vault:NAME"</code> so they never sit in the file.</p>
         <div id="services-list" class="stack"></div>
         <pre class="example">{
