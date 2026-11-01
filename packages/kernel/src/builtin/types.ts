@@ -1,8 +1,11 @@
 import type { ActionResult, Capability, Policy } from "@uab/protocol";
+import type { Vault } from "../vault.js";
 
 export interface ProviderContext {
   home: string;
   policy(): Policy;
+  /** For services that need a stored key or account. */
+  vault?: Vault;
 }
 
 /** A capability implemented inside the kernel process itself. */

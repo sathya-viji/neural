@@ -34,6 +34,8 @@ const TOOL_GROUPS: Record<string, RegExp> = {
   calendar: /\b(calendar|meetings?|events?|schedule\w*|appointments?|busy|free|cancel|reschedule|move)\b/i,
   reminders: /\b(remind\w*|todos?|to-dos?|tasks?)\b/i,
   system: /\b(time|date|day|notify|notification|open|link|website)\b/i,
+  web: /\b(search|look up|lookup|google|news|latest|headlines?|internet|online|web|website|https?:\/\/\S+|price|cost|who is|who was|what is|when is|where is|how (much|many|to)|score|results?|stock|movie|restaurant|near me|open now)\b/i,
+  weather: /\b(weather|rain\w*|temperature|forecast|hot|cold|humid\w*|umbrella|sunny|storm\w*)\b/i,
 };
 const ALWAYS = new Set(["system__now"]);
 const MAX_TOOLS = 10;

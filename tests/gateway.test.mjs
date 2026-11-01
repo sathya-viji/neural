@@ -21,6 +21,9 @@ test("built-in model sees only the tools a request needs, with short description
   assert.ok(names("open an issue on github").includes("mcp__github__create_issue"));
   assert.equal(pickTools(all, "remind me")[0].description, "Does reminders__list.");
   assert.equal(defaultModelSettings().active, "builtin");
+  const web = ["web__search", "web__read", "weather__forecast", "system__now"].map(t);
+  assert.deepEqual(pickTools(web, "will it rain in Chennai tomorrow?").map((x) => x.name), ["weather__forecast", "system__now"]);
+  assert.deepEqual(pickTools(web, "latest news about ISRO").map((x) => x.name), ["web__search", "web__read", "system__now"]);
 });
 
 test("Gemini tool schemas: no-input tools send no parameters, unsupported keys are removed", () => {

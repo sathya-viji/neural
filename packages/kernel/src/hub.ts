@@ -10,6 +10,7 @@ import { mailCapabilities } from "./builtin/mail.js";
 import { systemCapabilities } from "./builtin/system.js";
 import { appleCapabilities } from "./builtin/apple.js";
 import { gmail, gmailCapabilities } from "./builtin/gmail.js";
+import { webCapabilities } from "./builtin/web.js";
 import { readJson, writeJson } from "./store.js";
 import type { Vault } from "./vault.js";
 
@@ -38,6 +39,7 @@ const BUILTIN_TITLES: Record<string, string> = {
   calendar: "Calendar",
   reminders: "Reminders",
   gmail: "Gmail",
+  web: "Web & weather",
   system: "This computer",
 };
 
@@ -57,8 +59,9 @@ export class ServiceHub {
   private configPath: string;
 
   constructor(private ctx: ProviderContext, private vault: Vault) {
+    this.ctx = { ...ctx, vault };
     const personal = useAppleApps ? appleCapabilities : [...contactCapabilities, ...mailCapabilities];
-    for (const cap of [...fileCapabilities, ...personal, ...gmailCapabilities, ...systemCapabilities]) {
+    for (const cap of [...fileCapabilities, ...personal, ...gmailCapabilities, ...webCapabilities, ...systemCapabilities]) {
       this.builtins.set(cap.id, cap);
     }
     this.configPath = join(ctx.home, "services.json");
