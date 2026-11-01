@@ -97,7 +97,7 @@ function onGateway(e) {
   if (!current) return;
   if (e.type === "task") {
     current.container.prepend(
-      el("div", { class: "model-tag" }, e.locality === "cloud" ? el("span", { class: "cloud" }, "☁ ") : "⌂ ", `${e.model}${e.locality === "cloud" ? " · cloud" : " · on this computer"}`),
+      el("div", { class: "model-tag" }, e.locality === "cloud" ? el("span", { class: "cloud" }, "☁ ") : "⌂ ", `${e.model}${e.locality === "cloud" ? " · cloud" : /this Mac/.test(e.model) ? "" : " · on this computer"}`),
     );
   } else if (e.type === "thinking") {
     current.stepsNode.append(el("div", { class: "thinking" }, e.text));
@@ -412,9 +412,18 @@ function keyProblem(kind, key) {
 
 function setMode(mode) {
   document.querySelectorAll("#model-mode button").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
+  $("#builtin-settings").classList.toggle("hidden", mode !== "builtin");
   $("#local-settings").classList.toggle("hidden", mode !== "local");
   $("#cloud-settings").classList.toggle("hidden", mode !== "cloud");
   if (settings) settings.active = mode;
+  if (mode === "builtin") checkBuiltin();
+}
+
+async function checkBuiltin() {
+  const status = $("#builtin-status");
+  const r = await uab.call("builtin.status");
+  status.className = `hint ${r.available ? "ok" : "bad"}`;
+  status.textContent = r.available ? "Ready." : r.reason || "Not available on this computer.";
 }
 
 async function checkLocal() {

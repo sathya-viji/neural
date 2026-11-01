@@ -1,12 +1,14 @@
 import { AnthropicProvider } from "./providers/anthropic.js";
 import { OpenAICompatibleProvider } from "./providers/openai.js";
+import { AppleOnDeviceProvider } from "./providers/apple.js";
 import type { ModelProvider } from "./providers/types.js";
 
 export type CloudKind = "gemini" | "anthropic" | "openai-compatible";
 
 /** Which model the user picked. Models are replaceable; this is the only place that knows them. */
 export interface ModelSettings {
-  active: "local" | "cloud";
+  /** builtin: the model that comes with the device (Apple Intelligence). local: a model server like Ollama. */
+  active: "builtin" | "local" | "cloud";
   local: { baseUrl: string; model: string };
   cloud: { kind: CloudKind; model: string; baseUrl?: string; fallbacks?: string[] };
 }
@@ -16,13 +18,15 @@ export const GEMINI_FALLBACK_MODEL = "gemini-flash-latest";
 
 export function defaultModelSettings(): ModelSettings {
   return {
-    active: "local",
+    // Works with no setup on Macs with Apple Intelligence; the host falls back when it isn't available.
+    active: "builtin",
     local: { baseUrl: "http://localhost:11434/v1", model: "qwen3:8b" },
     cloud: { kind: "gemini", model: "" },
   };
 }
 
 export function describeModelSettings(s: ModelSettings): string {
+  if (s.active === "builtin") return "Built-in · on this Mac";
   return s.active === "local" ? `Local · ${s.local.model}` : `Cloud · ${s.cloud.model || cloudDefaultModel(s.cloud.kind)}`;
 }
 
@@ -76,6 +80,7 @@ export function pickGeminiModel(ids: string[]): string {
 
 /** The cloud API key is fetched from the kernel's vault by the caller. */
 export function createProvider(s: ModelSettings, cloudKey: string | null): ModelProvider {
+  if (s.active === "builtin") return new AppleOnDeviceProvider();
   if (s.active === "local") {
     return new OpenAICompatibleProvider({ baseUrl: s.local.baseUrl, model: s.local.model, label: `${s.local.model} (local)`, locality: "local" });
   }

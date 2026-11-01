@@ -39,6 +39,8 @@ export interface ModelProvider {
   /** Local models run on this machine; cloud models send data off it. */
   locality: "local" | "cloud";
   chat(req: ChatRequest): Promise<ChatResponse>;
+  /** Release anything held for a request (e.g. a helper process). */
+  dispose?(): void;
 }
 
 export class ProviderError extends Error {}

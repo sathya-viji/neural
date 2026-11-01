@@ -11,6 +11,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { KernelClient } from "@uab/kernel/client";
 import {
   Gateway,
+  appleModelAvailability,
   cloudModelsUrl,
   createProvider,
   defaultModelSettings,
@@ -170,7 +171,7 @@ function registerIpc(): void {
     // Gemini: pick the best free-tier model this key can use (unless the user chose one)
     // and keep a few others to fall back on when it's overloaded.
     let working: string[] | undefined;
-    if (s.cloud.kind === "gemini") {
+    if (s.cloud.kind === "gemini" && s.active === "cloud") {
       const listed = await listCloudModels(s.cloud);
       const key = (await kernel.call("vault.getModelKey", { name: "model.cloud" })).value;
       if (listed.ok && key) {
@@ -185,7 +186,7 @@ function registerIpc(): void {
           s.cloud.model = pickGeminiModel(listed.models);
         }
       }
-    } else {
+    } else if (s.cloud.kind !== "gemini") {
       delete s.cloud.fallbacks;
     }
     saveSettings(s);
@@ -194,6 +195,7 @@ function registerIpc(): void {
   handle("cloud.models", (cloud: ModelSettings["cloud"]) => listCloudModels(cloud));
   handle("key.set", (value: string) => kernel.call("vault.set", { name: "model.cloud", value: String(value) }));
   handle("key.has", () => kernel.call("vault.has", { name: "model.cloud" }));
+  handle("builtin.status", () => appleModelAvailability());
   handle("local.models", async (baseUrl: string) => {
     try {
       const res = await fetch(`${String(baseUrl).replace(/\/$/, "")}/models`, { signal: AbortSignal.timeout(2500) });

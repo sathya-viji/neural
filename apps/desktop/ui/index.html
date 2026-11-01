@@ -118,13 +118,21 @@
       <section class="view" id="view-settings">
         <header class="view-head"><h1>Settings</h1></header>
         <h2>Model</h2>
-        <p class="lede">Models are replaceable. A local model keeps everything on this computer. A cloud model is more capable, but your request and the results of each step are sent to its provider.</p>
+        <p class="lede">Models are replaceable. <b>Built-in</b> uses the AI that comes with this Mac: free, private, nothing to set up. A <b>cloud</b> model is smarter for complex tasks, but your request and the results of each step are sent to its provider.</p>
         <div class="segmented" id="model-mode">
-          <button data-mode="local">Local</button>
+          <button data-mode="builtin">Built-in</button>
+          <button data-mode="local">Local server</button>
           <button data-mode="cloud">Cloud</button>
         </div>
 
-        <div class="card" id="local-settings">
+        <div class="card" id="builtin-settings">
+          <div><b>Apple Intelligence, on this Mac</b></div>
+          <div class="hint">Runs entirely on this computer. No account, no key, no cost, and nothing leaves your Mac. Best for everyday tasks; switch to Cloud for complex ones.</div>
+          <div class="hint" id="builtin-status">Checking…</div>
+        </div>
+
+        <div class="card hidden" id="local-settings">
+          <div class="hint">For a model server you run yourself, such as Ollama or LM Studio.</div>
           <label>Server address <input id="local-url" placeholder="http://localhost:11434/v1" /></label>
           <label>Model <input id="local-model" list="local-models" placeholder="qwen3:8b" /></label>
           <datalist id="local-models"></datalist>

@@ -97,7 +97,7 @@ export const fileCapabilities: BuiltinCapability[] = [
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Words that appear in the file name, e.g. 'q3 report'" },
+        query: { type: "string", description: "Words that appear in the file name" },
         limit: { type: "number", description: "Maximum results (default 10)" },
       },
       required: ["query"],

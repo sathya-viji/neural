@@ -304,22 +304,26 @@ export const gmailCapabilities: BuiltinCapability[] = [
     id: "gmail.search",
     service: "gmail",
     title: "Search Gmail",
+    // Examples avoid real-looking names: small models tend to copy them literally.
     description:
-      "Search the user's Gmail. Uses Gmail search syntax, e.g. 'from:priya newer_than:7d', 'subject:invoice', 'is:unread', 'has:attachment'. Returns sender, subject, date, a snippet and the message id.",
+      "Find emails in the user's Gmail, newest first. Leave query empty for the latest emails in the inbox. Otherwise use Gmail search words such as is:unread, newer_than:7d, has:attachment, subject:WORD or from:NAME.",
     inputSchema: {
       type: "object",
-      properties: { query: { type: "string", description: "Gmail search, e.g. 'from:priya newer_than:7d'" }, limit: { type: "number", description: "Maximum results (default 10)" } },
-      required: ["query"],
+      properties: {
+        query: { type: "string", description: "Optional Gmail search. Empty means the latest inbox emails." },
+        limit: { type: "number", description: "Maximum results (default 10)" },
+      },
     },
     effects: ["read"],
     risk: "low",
     available: onlyWhenConnected,
-    summarize: (a) => `Search your Gmail for "${a.query}"`,
+    summarize: (a) => (a.query ? `Search your Gmail for "${a.query}"` : "Look at your latest Gmail emails"),
     async run(args) {
       const limit = typeof args.limit === "number" ? Math.max(1, Math.min(args.limit, 25)) : 10;
-      const list = await gmail.api<{ messages?: { id: string }[] }>(`/messages?q=${encodeURIComponent(str(args, "query"))}&maxResults=${limit}`);
+      const query = str(args, "query", false) || "in:inbox";
+      const list = await gmail.api<{ messages?: { id: string }[] }>(`/messages?q=${encodeURIComponent(query)}&maxResults=${limit}`);
       const ids = (list.messages ?? []).map((m) => m.id);
-      if (!ids.length) return { content: `No emails match "${args.query}".`, data: [] };
+      if (!ids.length) return { content: `No emails match "${query}".`, data: [] };
       const messages = await Promise.all(
         ids.map((id) => gmail.api<GmailMessage>(`/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`)),
       );

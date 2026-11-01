@@ -41,10 +41,30 @@ function when(iso: string): string {
   return d.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+/** For approval cards: catch the common model mistake of scheduling something in the past. */
+function whenChecked(value: unknown): string {
+  const text = when(String(value));
+  return new Date(String(value)).getTime() < Date.now() ? `${text} ⚠ this time has already passed` : text;
+}
+
+/**
+ * Accepts ISO dates and the looser forms small models produce, e.g.
+ * "Sun Nov 08 2026 16:01 IST" (time-zone abbreviations aren't understood by
+ * Date, so they're dropped and the time is read as local).
+ */
 function date(args: Record<string, unknown>, key: string): string {
   const v = str(args, key);
-  if (Number.isNaN(new Date(v).getTime())) throw new Error(`"${key}" must be a date and time like 2026-11-02T15:00`);
-  return v;
+  const candidates = [v, v.replace(/\s*\(?[A-Z]{2,5}\)?$/, ""), v.replace(/\s*(GMT|UTC)[+-]\d{4}.*$/, "")];
+  for (const c of candidates) {
+    const d = new Date(c);
+    if (!Number.isNaN(d.getTime())) return c === v ? v : localIso(d);
+  }
+  throw new Error(`"${key}" must be a date and time like 2026-11-02T15:00`);
+}
+
+function localIso(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 const DATE_HINT = "Local date and time, e.g. 2026-11-02T15:00";
@@ -265,7 +285,7 @@ const calendar: BuiltinCapability[] = [
     },
     effects: ["write"],
     risk: "medium",
-    summarize: (a) => `Add "${a.title}" to your calendar, ${when(String(a.start))}${a.calendar ? ` in ${a.calendar}` : ""}`,
+    summarize: (a) => `Add "${a.title}" to your calendar, ${whenChecked(a.start)}${a.calendar ? ` in ${a.calendar}` : ""}`,
     async run(args) {
       const created = await jxa<{ id: string }>(
         "Calendar",
@@ -301,7 +321,7 @@ const calendar: BuiltinCapability[] = [
     },
     effects: ["write"],
     risk: "medium",
-    summarize: (a) => `Move a calendar event to ${when(String(a.start))}`,
+    summarize: (a) => `Move a calendar event to ${whenChecked(a.start)}`,
     async run(args) {
       const before = await readEvent(str(args, "id"));
       if (!before) throw new Error("That event wasn't found. List events again to get its id.");
@@ -470,12 +490,12 @@ const reminders: BuiltinCapability[] = [
     id: "reminders.create",
     service: "reminders",
     title: "Add a reminder",
-    description: "Add a reminder to the user's Reminders app, optionally with a due time.",
+    description: "Add a reminder to the user's Reminders app. Set due whenever the user says when.",
     inputSchema: {
       type: "object",
       properties: {
-        title: { type: "string" },
-        due: { type: "string", description: DATE_HINT },
+        title: { type: "string", description: "What to be reminded about, without the time" },
+        due: { type: "string", description: `When to remind. ${DATE_HINT}. Required if the user gave a time or day.` },
         notes: { type: "string" },
         list: { type: "string", description: "List name; leave out for the default list" },
       },
@@ -483,7 +503,7 @@ const reminders: BuiltinCapability[] = [
     },
     effects: ["write"],
     risk: "medium",
-    summarize: (a) => `Add a reminder "${a.title}"${a.due ? ` for ${when(String(a.due))}` : ""}`,
+    summarize: (a) => `Add a reminder "${a.title}"${a.due ? ` for ${whenChecked(a.due)}` : ""}`,
     async run(args) {
       if (args.due !== undefined) date(args, "due");
       const r = await jxa<{ id: string; list: string }>(

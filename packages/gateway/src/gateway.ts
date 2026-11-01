@@ -53,7 +53,7 @@ export class Gateway {
 
     const messages: Message[] = [...(options.history ?? []), { role: "user", content: intent }];
     const maxSteps = options.maxSteps ?? 12;
-    const system = `${SYSTEM}\n\nThe current time is ${new Date().toString()}.`;
+    const system = `${SYSTEM}\n\n${dateContext(new Date())}`;
     let finalText = "";
 
     try {
@@ -92,12 +92,35 @@ export class Gateway {
       const message = (err as Error).name === "AbortError" ? "Stopped." : (err as Error).message;
       emit({ type: "error", message });
       finalText = message;
+    } finally {
+      this.provider.dispose?.();
     }
 
     await this.kernel.call("task.end", { taskId, summary: finalText });
     emit({ type: "done", text: finalText, taskId });
     return { taskId, text: finalText, messages };
   }
+}
+
+/**
+ * Small models get relative dates wrong ("tomorrow" becomes today), so give
+ * them the next week's dates ready-made instead of asking them to calculate.
+ */
+export function dateContext(now: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const day = (d: Date) => d.toLocaleDateString("en-US", { weekday: "long" });
+  const lines = [];
+  for (let i = 0; i < 8; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+    const label = i === 0 ? "today" : i === 1 ? "tomorrow" : `in ${i} days`;
+    lines.push(`- ${label}: ${day(d)} ${iso(d)}`);
+  }
+  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return `Right now it is ${time} on ${day(now)} ${iso(now)} (${Intl.DateTimeFormat().resolvedOptions().timeZone}).
+Use these dates exactly; don't calculate dates yourself:
+${lines.join("\n")}
+Write times as YYYY-MM-DDTHH:MM in local time, e.g. tomorrow at 10am is ${iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1))}T10:00.`;
 }
 
 /** What the model is told about the kernel's decision. Service output is marked as data. */
