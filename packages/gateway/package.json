@@ -1,0 +1,13 @@
+{
+  "name": "@uab/gateway",
+  "version": "0.1.0",
+  "description": "Model gateway and planner. Turns an intention into action proposals for the kernel. Works with local and cloud models.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": { ".": "./dist/index.js" },
+  "dependencies": {
+    "@uab/protocol": "0.1.0"
+  },
+  "license": "Apache-2.0"
+}

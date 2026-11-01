@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'" />
+  <title>Unified AI Base</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <nav class="sidebar">
+      <div class="brand">
+        <div class="mark" aria-hidden="true"></div>
+        <div>
+          <div class="brand-name">Unified AI Base</div>
+          <div class="brand-sub" id="identity">Starting…</div>
+        </div>
+      </div>
+      <button class="nav active" data-view="ask">Ask</button>
+      <button class="nav" data-view="activity">Activity</button>
+      <button class="nav" data-view="permissions">Permissions</button>
+      <button class="nav" data-view="services">Services</button>
+      <button class="nav" data-view="settings">Settings</button>
+      <div class="sidebar-foot">
+        <div class="kernel-status"><span class="dot ok"></span> Kernel running</div>
+        <div class="model-status" id="model-label">—</div>
+      </div>
+    </nav>
+
+    <main>
+      <!-- Ask -->
+      <section class="view active" id="view-ask">
+        <header class="view-head">
+          <h1>What would you like done?</h1>
+          <button class="ghost" id="new-conversation">New conversation</button>
+        </header>
+        <div class="transcript" id="transcript">
+          <div class="empty" id="ask-empty">
+            <p>Say what you want. The AI works out the steps; the kernel checks each one against your permissions and asks you before anything important happens.</p>
+            <div class="chips">
+              <button class="chip">Find the Q3 report and email it to Sam</button>
+              <button class="chip">What files did I change this week in Documents?</button>
+              <button class="chip">Summarise the newest file in Downloads</button>
+            </div>
+          </div>
+        </div>
+        <form class="composer" id="composer">
+          <textarea id="input" rows="1" placeholder="e.g. Find the Q3 report and send it to Sam" autocomplete="off"></textarea>
+          <button type="submit" class="primary" id="send">Go</button>
+          <button type="button" class="ghost hidden" id="stop">Stop</button>
+        </form>
+      </section>
+
+      <!-- Activity -->
+      <section class="view" id="view-activity">
+        <header class="view-head">
+          <h1>Activity</h1>
+          <div class="integrity" id="integrity"></div>
+        </header>
+        <p class="lede">Every action the AI proposed, what the kernel decided, and who approved it. Each record is linked to the one before, so changes to the history can be detected.</p>
+        <div id="activity-list" class="stack"></div>
+      </section>
+
+      <!-- Permissions -->
+      <section class="view" id="view-permissions">
+        <header class="view-head"><h1>Permissions</h1></header>
+        <p class="lede">You decide what the AI may do. <b>Allow</b> runs without asking, <b>Ask</b> needs your OK each time, <b>Block</b> is never allowed. Defaults: reading is allowed; changing or sending things asks first.</p>
+        <h2>Shared folders</h2>
+        <div id="roots" class="stack"></div>
+        <button class="ghost" id="add-root">Add folder…</button>
+        <h2>Capabilities</h2>
+        <div id="caps" class="stack"></div>
+      </section>
+
+      <!-- Services -->
+      <section class="view" id="view-services">
+        <header class="view-head">
+          <h1>Services</h1>
+          <div class="row">
+            <button class="ghost" id="edit-services">Edit services.json</button>
+            <button class="ghost" id="reload-services">Reconnect</button>
+          </div>
+        </header>
+        <p class="lede">Services give the AI things it can do. Built-in services run inside the kernel. Add any MCP server in <code>services.json</code>, using the same format as other MCP apps. Secrets can be referenced as <code>"vault:NAME"</code> so they never sit in the file.</p>
+        <div id="services-list" class="stack"></div>
+        <pre class="example">{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "vault:github.token" }
+    }
+  }
+}</pre>
+      </section>
+
+      <!-- Settings -->
+      <section class="view" id="view-settings">
+        <header class="view-head"><h1>Settings</h1></header>
+        <h2>Model</h2>
+        <p class="lede">Models are replaceable. A local model keeps everything on this computer. A cloud model is more capable, but your request and the results of each step are sent to its provider.</p>
+        <div class="segmented" id="model-mode">
+          <button data-mode="local">Local</button>
+          <button data-mode="cloud">Cloud</button>
+        </div>
+
+        <div class="card" id="local-settings">
+          <label>Server address <input id="local-url" placeholder="http://localhost:11434/v1" /></label>
+          <label>Model <input id="local-model" list="local-models" placeholder="qwen3:8b" /></label>
+          <datalist id="local-models"></datalist>
+          <div class="hint" id="local-status"></div>
+        </div>
+
+        <div class="card hidden" id="cloud-settings">
+          <label>Provider
+            <select id="cloud-kind">
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="openai-compatible">OpenAI-compatible</option>
+            </select>
+          </label>
+          <label>Model <input id="cloud-model" placeholder="claude-sonnet-5-5" /></label>
+          <label class="hidden" id="cloud-url-row">Server address <input id="cloud-url" placeholder="https://api.openai.com/v1" /></label>
+          <label>API key <input id="cloud-key" type="password" placeholder="Stored in your Keychain" /></label>
+          <div class="hint" id="cloud-status"></div>
+        </div>
+        <button class="primary" id="save-settings">Save</button>
+
+        <h2>Your data</h2>
+        <p class="lede">Settings, permissions, the activity history and the outbox are kept on this computer in <code id="home-path"></code>. There is no telemetry.</p>
+        <button class="ghost" id="open-home">Open data folder</button>
+      </section>
+    </main>
+  </div>
+  <script src="app.js" type="module"></script>
+</body>
+</html>

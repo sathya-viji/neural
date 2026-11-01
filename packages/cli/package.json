@@ -1,0 +1,13 @@
+{
+  "name": "@uab/cli",
+  "version": "0.1.0",
+  "description": "Command-line host for Unified AI Base.",
+  "type": "module",
+  "bin": { "uab": "dist/main.js" },
+  "dependencies": {
+    "@uab/gateway": "0.1.0",
+    "@uab/kernel": "0.1.0",
+    "@uab/protocol": "0.1.0"
+  },
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@uab/protocol",
+  "version": "0.1.0",
+  "description": "Shared types for Unified AI Base: capabilities, proposals, decisions, audit records and the kernel RPC.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": { ".": "./dist/index.js" },
+  "license": "Apache-2.0"
+}
