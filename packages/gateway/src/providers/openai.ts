@@ -1,4 +1,4 @@
-import type { ChatRequest, ChatResponse, Message, ModelProvider } from "./types.js";
+import type { ChatRequest, ChatResponse, Message, ModelProvider, ToolSpec } from "./types.js";
 import { ProviderError } from "./types.js";
 
 export interface OpenAICompatibleOptions {
@@ -8,6 +8,8 @@ export interface OpenAICompatibleOptions {
   apiKey?: string;
   label?: string;
   locality?: "local" | "cloud";
+  /** Some servers (Gemini) accept only a subset of JSON Schema in tool definitions. */
+  strictSchemas?: boolean;
 }
 
 /**
@@ -37,14 +39,22 @@ export class OpenAICompatibleProvider implements ModelProvider {
       body: JSON.stringify({
         model: this.options.model,
         messages: [{ role: "system", content: req.system }, ...toOpenAI(req.messages)],
-        tools: req.tools.map((t) => ({ type: "function", function: t })),
+        tools: req.tools.map((t) => ({
+          type: "function",
+          function: this.options.strictSchemas ? strictTool(t) : t,
+        })),
       }),
     }).catch((err: Error) => {
       throw new ProviderError(`Can't reach ${this.options.baseUrl} (${err.message}). Is the model server running?`);
     });
     if (!res.ok) throw new ProviderError(`${this.label} ${res.status}: ${(await res.text()).slice(0, 300)}`);
     const body = (await res.json()) as {
-      choices: { message: { content?: string | null; tool_calls?: { id: string; function: { name: string; arguments: string | object } }[] } }[];
+      choices: {
+        message: {
+          content?: string | null;
+          tool_calls?: { id: string; function: { name: string; arguments: string | object }; extra_content?: unknown }[];
+        };
+      }[];
     };
     const msg = body.choices[0]?.message ?? {};
     return {
@@ -53,9 +63,30 @@ export class OpenAICompatibleProvider implements ModelProvider {
         id: c.id || `call_${i}`,
         name: c.function.name,
         args: parseArgs(c.function.arguments),
+        extra: c.extra_content,
       })),
     };
   }
+}
+
+const UNSUPPORTED_SCHEMA_KEYS = new Set(["$schema", "$id", "$ref", "$defs", "definitions", "additionalProperties", "examples", "default", "const", "pattern", "patternProperties", "oneOf", "allOf", "not"]);
+
+function strictSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(strictSchema);
+  if (!schema || typeof schema !== "object") return schema;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(schema)) {
+    if (UNSUPPORTED_SCHEMA_KEYS.has(k)) continue;
+    out[k] = k === "properties" ? Object.fromEntries(Object.entries(v as object).map(([p, s]) => [p, strictSchema(s)])) : strictSchema(v);
+  }
+  return out;
+}
+
+/** Gemini rejects object schemas with no properties, so tools without inputs send no parameters. */
+export function strictTool(t: ToolSpec): Partial<ToolSpec> {
+  const hasProps = t.parameters.properties && Object.keys(t.parameters.properties).length > 0;
+  if (!hasProps) return { name: t.name, description: t.description };
+  return { name: t.name, description: t.description, parameters: strictSchema(t.parameters) as ToolSpec["parameters"] };
 }
 
 function parseArgs(raw: string | object): Record<string, unknown> {
@@ -76,7 +107,12 @@ function toOpenAI(messages: Message[]): object[] {
         role: "assistant",
         content: m.text || null,
         ...(m.toolCalls.length
-          ? { tool_calls: m.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: JSON.stringify(c.args) } })) }
+          ? { tool_calls: m.toolCalls.map((c) => ({
+              id: c.id,
+              type: "function",
+              function: { name: c.name, arguments: JSON.stringify(c.args) },
+              ...(c.extra !== undefined ? { extra_content: c.extra } : {}),
+            })) }
           : {}),
       };
     }

@@ -8,7 +8,7 @@ const CHANNELS = new Set([
   "capabilities", "policy.get", "policy.set", "roots.add", "roots.remove",
   "audit", "audit.verify", "tasks",
   "services", "services.reload", "services.edit",
-  "settings.get", "settings.set", "key.set", "key.has", "local.models",
+  "settings.get", "settings.set", "key.set", "key.has", "local.models", "cloud.models",
   "reveal", "openHome",
 ]);
 

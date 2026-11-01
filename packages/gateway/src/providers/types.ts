@@ -10,6 +10,8 @@ export interface ToolCall {
   id: string;
   name: string;
   args: Record<string, unknown>;
+  /** Provider data that must be sent back unchanged (e.g. Gemini thought signatures). */
+  extra?: unknown;
 }
 
 /** Provider-neutral conversation history. */

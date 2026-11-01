@@ -326,14 +326,44 @@ async function loadSettings() {
   $("#cloud-kind").value = settings.cloud.kind;
   $("#cloud-model").value = settings.cloud.model;
   $("#cloud-url").value = settings.cloud.baseUrl ?? "";
-  $("#cloud-url-row").classList.toggle("hidden", settings.cloud.kind !== "openai-compatible");
+  showKind(settings.cloud.kind);
   const has = await uab.call("key.has");
   $("#cloud-key").value = "";
   $("#cloud-key").placeholder = has.present ? "•••••••• saved in Keychain (type to replace)" : "Paste your API key";
-  const status = $("#cloud-status");
-  status.className = `hint ${has.present ? "ok" : ""}`;
-  status.textContent = has.present ? "API key saved." : "No API key yet.";
   checkLocal();
+  if (has.present) checkCloud();
+  else setCloudStatus("", "No API key yet.");
+}
+
+function showKind(kind) {
+  $("#cloud-url-row").classList.toggle("hidden", kind !== "openai-compatible");
+  $("#gemini-help").classList.toggle("hidden", kind !== "gemini");
+  $("#cloud-model").placeholder = kind === "gemini" ? "Picked automatically" : kind === "anthropic" ? "claude-sonnet-5-5" : "Model name";
+}
+
+function setCloudStatus(cls, text) {
+  const status = $("#cloud-status");
+  status.className = `hint ${cls}`;
+  status.textContent = text;
+}
+
+/** Confirms the saved key works and fills the model suggestions. */
+async function checkCloud() {
+  if (settings.cloud.kind === "anthropic") return setCloudStatus("ok", "API key saved.");
+  setCloudStatus("", "Checking your key…");
+  const r = await uab.call("cloud.models", settings.cloud);
+  if (!r.ok) return setCloudStatus("bad", r.error || "Couldn't reach the provider.");
+  const shown = r.models.filter((m) => settings.cloud.kind !== "gemini" || /^gemini-/.test(m));
+  $("#cloud-models").replaceChildren(...shown.map((m) => el("option", { value: m })));
+  setCloudStatus("ok", `Key works. Using ${settings.cloud.model || "the default model"}${shown.length ? ` · ${shown.length} models available` : ""}.`);
+}
+
+/** Catch keys that are obviously incomplete or for a different provider before saving them. */
+function keyProblem(kind, key) {
+  if (kind === "gemini" && !/^AIza[\w-]{30,}$/.test(key)) return "That doesn't look like a Gemini key. They start with \"AIza\" and are 39 characters long. Copy it again from AI Studio.";
+  if (kind === "anthropic" && (key.includes("…") || key.includes("...") || key.length < 60))
+    return "That looks like the shortened key shown in the Console's key list, not the full key. Create a new key and copy it with the copy button (it's about 100 characters).";
+  return null;
 }
 
 function setMode(mode) {
@@ -364,26 +394,27 @@ async function checkLocal() {
 document.querySelectorAll("#model-mode button").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
 $("#local-url").addEventListener("change", checkLocal);
 $("#cloud-kind").addEventListener("change", () => {
-  const kind = $("#cloud-kind").value;
-  $("#cloud-url-row").classList.toggle("hidden", kind !== "openai-compatible");
-  if (kind === "anthropic" && !$("#cloud-model").value) $("#cloud-model").value = "claude-sonnet-5-5";
+  showKind($("#cloud-kind").value);
+  $("#cloud-model").value = "";
+  $("#cloud-models").replaceChildren();
 });
 $("#save-settings").addEventListener("click", async (e) => {
   settings.local = { baseUrl: $("#local-url").value.trim() || "http://localhost:11434/v1", model: $("#local-model").value.trim() || "qwen3:8b" };
   settings.cloud = { kind: $("#cloud-kind").value, model: $("#cloud-model").value.trim(), baseUrl: $("#cloud-url").value.trim() || undefined };
   const key = $("#cloud-key").value.trim();
-  if (key && settings.cloud.kind === "anthropic" && (key.includes("…") || key.includes("...") || key.length < 60)) {
-    const status = $("#cloud-status");
-    status.className = "hint bad";
-    status.textContent = "That looks like the shortened key shown in the Console's key list, not the full key. Create a new key and copy it with the copy button (it's about 100 characters).";
-    return;
-  }
+  const problem = key ? keyProblem(settings.cloud.kind, key) : null;
+  if (problem) return setCloudStatus("bad", problem);
   if (key) await uab.call("key.set", key);
-  const { model } = await uab.call("settings.set", settings);
-  $("#model-label").textContent = model;
-  e.target.textContent = "Saved";
-  setTimeout(() => (e.target.textContent = "Save"), 1200);
-  loadSettings();
+  e.target.disabled = true;
+  try {
+    const { model } = await uab.call("settings.set", settings);
+    $("#model-label").textContent = model;
+    e.target.textContent = "Saved";
+    setTimeout(() => (e.target.textContent = "Save"), 1200);
+    await loadSettings();
+  } finally {
+    e.target.disabled = false;
+  }
 });
 $("#open-home").addEventListener("click", () => uab.call("openHome"));
 

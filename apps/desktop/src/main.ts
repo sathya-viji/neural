@@ -9,7 +9,16 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve, sep } from "node:path";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { KernelClient } from "@uab/kernel/client";
-import { Gateway, createProvider, defaultModelSettings, describeModelSettings, type Message, type ModelSettings } from "@uab/gateway";
+import {
+  Gateway,
+  cloudModelsUrl,
+  createProvider,
+  defaultModelSettings,
+  describeModelSettings,
+  pickGeminiModel,
+  type Message,
+  type ModelSettings,
+} from "@uab/gateway";
 import type { KernelEvent, Permission } from "@uab/protocol";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -74,6 +83,25 @@ async function ask(text: string): Promise<void> {
   }
 }
 
+/** Ask the cloud provider which models the saved key can use. Also confirms the key works. */
+async function listCloudModels(cloud: ModelSettings["cloud"]): Promise<{ ok: boolean; models: string[]; error?: string }> {
+  const url = cloudModelsUrl(cloud);
+  if (!url) return { ok: true, models: [] };
+  const key = (await kernel.call("vault.getModelKey", { name: "model.cloud" })).value;
+  if (!key) return { ok: false, models: [], error: "No API key saved yet." };
+  try {
+    const res = await fetch(url, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000) });
+    if (!res.ok) {
+      const text = await res.text();
+      return { ok: false, models: [], error: res.status === 400 || res.status === 401 || res.status === 403 ? "The provider rejected this API key." : `${res.status}: ${text.slice(0, 160)}` };
+    }
+    const body = (await res.json()) as { data?: { id: string }[] };
+    return { ok: true, models: (body.data ?? []).map((m) => m.id.replace(/^models\//, "")) };
+  } catch (err) {
+    return { ok: false, models: [], error: (err as Error).message };
+  }
+}
+
 /* ---------------- IPC: the only things the window can ask for ---------------- */
 
 function insideHome(path: string): string {
@@ -123,10 +151,16 @@ function registerIpc(): void {
   handle("services.edit", () => shell.openPath(join(kernelHome, "services.json")));
 
   handle("settings.get", () => loadSettings());
-  handle("settings.set", (s: ModelSettings) => {
+  handle("settings.set", async (s: ModelSettings) => {
+    // No model chosen for Gemini: pick the best free-tier one this key can use.
+    if (s.active === "cloud" && s.cloud.kind === "gemini" && !s.cloud.model) {
+      const listed = await listCloudModels(s.cloud);
+      if (listed.ok) s.cloud.model = pickGeminiModel(listed.models);
+    }
     saveSettings(s);
-    return { model: describeModelSettings(s) };
+    return { model: describeModelSettings(s), settings: s };
   });
+  handle("cloud.models", (cloud: ModelSettings["cloud"]) => listCloudModels(cloud));
   handle("key.set", (value: string) => kernel.call("vault.set", { name: "model.cloud", value: String(value) }));
   handle("key.has", () => kernel.call("vault.has", { name: "model.cloud" }));
   handle("local.models", async (baseUrl: string) => {
