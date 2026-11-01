@@ -16,7 +16,9 @@ import {
   defaultModelSettings,
   describeModelSettings,
   pickGeminiModel,
+  probeModels,
   rankGeminiModels,
+  GEMINI_BASE_URL,
   type Message,
   type ModelSettings,
 } from "@uab/gateway";
@@ -155,18 +157,27 @@ function registerIpc(): void {
   handle("settings.set", async (s: ModelSettings) => {
     // Gemini: pick the best free-tier model this key can use (unless the user chose one)
     // and keep a few others to fall back on when it's overloaded.
+    let working: string[] | undefined;
     if (s.cloud.kind === "gemini") {
       const listed = await listCloudModels(s.cloud);
-      if (listed.ok) {
-        const ranked = rankGeminiModels(listed.models);
-        if (!s.cloud.model) s.cloud.model = pickGeminiModel(listed.models);
-        s.cloud.fallbacks = ranked.filter((m) => m !== s.cloud.model).slice(0, 4);
+      const key = (await kernel.call("vault.getModelKey", { name: "model.cloud" })).value;
+      if (listed.ok && key) {
+        const ranked = rankGeminiModels(listed.models).slice(0, 10);
+        const candidates = s.cloud.model && !ranked.includes(s.cloud.model) ? [s.cloud.model, ...ranked] : ranked;
+        working = await probeModels(GEMINI_BASE_URL, key, candidates);
+        if (working.length) {
+          // Keep the user's choice if it works; otherwise the best one that answered.
+          if (!s.cloud.model || !working.includes(s.cloud.model)) s.cloud.model = working[0];
+          s.cloud.fallbacks = working.filter((m) => m !== s.cloud.model).slice(0, 4);
+        } else if (!s.cloud.model) {
+          s.cloud.model = pickGeminiModel(listed.models);
+        }
       }
     } else {
       delete s.cloud.fallbacks;
     }
     saveSettings(s);
-    return { model: describeModelSettings(s), settings: s };
+    return { model: describeModelSettings(s), settings: s, working };
   });
   handle("cloud.models", (cloud: ModelSettings["cloud"]) => listCloudModels(cloud));
   handle("key.set", (value: string) => kernel.call("vault.set", { name: "model.cloud", value: String(value) }));

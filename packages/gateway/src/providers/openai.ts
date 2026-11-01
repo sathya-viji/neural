@@ -66,7 +66,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
   }
 
   private async attempt(model: string, req: ChatRequest): Promise<ChatResponse> {
-    const timeout = AbortSignal.timeout(this.options.timeoutMs ?? (this.locality === "local" ? 180_000 : 30_000));
+    const timeout = AbortSignal.timeout(this.options.timeoutMs ?? (this.locality === "local" ? 180_000 : 20_000));
     const signal = req.signal ? AbortSignal.any([req.signal, timeout]) : timeout;
     const res = await fetch(`${this.options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
@@ -90,7 +90,9 @@ export class OpenAICompatibleProvider implements ModelProvider {
     });
     if (!res.ok) {
       const text = (await res.text()).slice(0, 300);
-      if (res.status === 429 || res.status >= 500) throw new RetryableError(`${model} ${res.status}: ${text}`);
+      // 429 busy or out of quota, 5xx overloaded, 404 retired: another model may still answer.
+      const tryAnother = res.status === 429 || res.status >= 500 || (res.status === 404 && (this.options.fallbackModels?.length ?? 0) > 0);
+      if (tryAnother) throw new RetryableError(`${model} ${res.status}: ${text}`);
       throw new ProviderError(`${model} ${res.status}: ${text}`);
     }
     const body = (await res.json()) as {

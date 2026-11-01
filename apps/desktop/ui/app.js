@@ -406,12 +406,20 @@ $("#save-settings").addEventListener("click", async (e) => {
   if (problem) return setCloudStatus("bad", problem);
   if (key) await uab.call("key.set", key);
   e.target.disabled = true;
+  if (settings.active === "cloud" && settings.cloud.kind === "gemini") {
+    e.target.textContent = "Testing models…";
+    setCloudStatus("", "Testing which Gemini models are answering right now…");
+  }
   try {
-    const { model } = await uab.call("settings.set", settings);
+    const { model, working } = await uab.call("settings.set", settings);
     $("#model-label").textContent = model;
     e.target.textContent = "Saved";
     setTimeout(() => (e.target.textContent = "Save"), 1200);
     await loadSettings();
+    if (working) {
+      if (working.length) setCloudStatus("ok", `Working now: ${working.join(", ")}. Using ${settings.cloud.model}; the others are backups.`);
+      else setCloudStatus("bad", "No Gemini model answered. Your free quota may be used up for today, or Google is busy. Try again later.");
+    }
   } finally {
     e.target.disabled = false;
   }

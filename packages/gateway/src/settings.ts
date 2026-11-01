@@ -47,6 +47,29 @@ export function rankGeminiModels(ids: string[]): string[] {
   return [...byVersion("flash"), ...byVersion("flash-lite")];
 }
 
+/**
+ * Catalogues list models that are retired, out of free quota or overloaded.
+ * Send each a tiny request in parallel and return the ones that answered, in the order given.
+ */
+export async function probeModels(baseUrl: string, apiKey: string, models: string[], timeoutMs = 12_000): Promise<string[]> {
+  const results = await Promise.all(
+    models.map(async (model) => {
+      try {
+        const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+          method: "POST",
+          signal: AbortSignal.timeout(timeoutMs),
+          headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({ model, messages: [{ role: "user", content: "Reply with OK." }], max_tokens: 5 }),
+        });
+        return res.ok;
+      } catch {
+        return false;
+      }
+    }),
+  );
+  return models.filter((_, i) => results[i]);
+}
+
 export function pickGeminiModel(ids: string[]): string {
   return rankGeminiModels(ids)[0] ?? GEMINI_FALLBACK_MODEL;
 }
