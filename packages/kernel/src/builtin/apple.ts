@@ -92,18 +92,28 @@ const contacts: BuiltinCapability[] = [
 
 /* ---------------- Mail ---------------- */
 
+// Paths and addresses are turned into plain values before talking to Mail:
+// inside a "tell Mail" block, loop items are references Mail can't convert.
 const MAIL_SCRIPT = `on run argv
   set {mode, recipientText, theSubject, theBody, attachmentText} to argv
+  set recipientList to {}
+  repeat with addr in paragraphs of recipientText
+    set addrText to contents of addr
+    if length of addrText > 0 then set end of recipientList to addrText
+  end repeat
+  set fileList to {}
+  repeat with p in paragraphs of attachmentText
+    set pathText to contents of p
+    if length of pathText > 0 then set end of fileList to (POSIX file pathText) as alias
+  end repeat
   tell application "Mail"
     set m to make new outgoing message with properties {subject:theSubject, content:theBody & return & return, visible:(mode is "draft")}
     tell m
-      repeat with addr in paragraphs of recipientText
-        if length of addr > 0 then make new to recipient at end of to recipients with properties {address:addr}
+      repeat with addrText in recipientList
+        make new to recipient at end of to recipients with properties {address:(contents of addrText)}
       end repeat
-      repeat with p in paragraphs of attachmentText
-        if length of p > 0 then
-          tell content to make new attachment with properties {file name:(POSIX file p) as alias} at after last paragraph
-        end if
+      repeat with f in fileList
+        tell content to make new attachment with properties {file name:(contents of f)} at after last paragraph
       end repeat
     end tell
     if mode is "send" then
