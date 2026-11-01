@@ -47,8 +47,7 @@ try {
   } else if (!arg) {
     console.log('Usage: uab "what you want done"   |   uab --activity   |   uab --services');
   } else {
-    const key = settings.active === "cloud" ? (await kernel.call("vault.getModelKey", { name: "model.cloud" })).value ?? process.env.ANTHROPIC_API_KEY ?? null : null;
-    const gateway = new Gateway(kernel, createProvider(settings, key, kernel));
+    const gateway = new Gateway(kernel, createProvider(settings, kernel));
     await gateway.run(arg, {
       onEvent(e) {
         if (e.type === "task") console.log(`Using ${e.model} (${e.locality})`);

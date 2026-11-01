@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer } from "node:http";
 import { KernelClient } from "@uab/kernel/client";
 import { Gateway } from "@uab/gateway";
 
@@ -184,10 +185,31 @@ test("show a web page: Google searches and public links open in the app's browse
   assert.match(local.error, /local network/);
 });
 
-test("vault never hands out service secrets", async () => {
-  await kernel.call("vault.set", { name: "github.token", value: "s3cret" });
-  await kernel.call("vault.set", { name: "model.cloud", value: "k" });
-  assert.equal((await kernel.call("vault.has", { name: "github.token" })).present, true);
-  assert.equal((await kernel.call("vault.getModelKey", { name: "model.cloud" })).value, "k");
-  await assert.rejects(kernel.call("vault.getModelKey", { name: "github.token" }), /Only model keys/);
+test("cloud model keys never leave the kernel: it adds them, and only for the provider's own address", async () => {
+  let seen;
+  const provider = createServer((req, res) => ((seen = req.headers.authorization), res.end('{"data":[]}')));
+  await new Promise((r) => provider.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${provider.address().port}/v1`;
+  try {
+    await kernel.call("model.saveKey", { value: "sk-test", endpoint: base });
+    assert.equal((await kernel.call("model.hasKey", {})).present, true);
+    const r = await kernel.call("model.fetch", { url: `${base}/models`, auth: "bearer" });
+    assert.equal(r.status, 200);
+    assert.equal(seen, "Bearer sk-test");
+    await assert.rejects(kernel.call("model.fetch", { url: "https://example.com/steal", auth: "bearer" }), /different address/);
+    await assert.rejects(kernel.call("vault.getModelKey", { name: "model.cloud" }));
+  } finally {
+    provider.close();
+  }
+});
+
+test("saved sign-ins and keys are listed by name only, and can be removed", async () => {
+  await kernel.call("vault.set", { name: "gmail.client", value: JSON.stringify({ clientId: "x", clientSecret: "y" }) });
+  const list = await kernel.call("vault.list", {});
+  assert.ok(list.some((e) => e.name === "model.cloud" && /API key/.test(e.label)));
+  assert.ok(list.some((e) => e.name === "gmail.client"));
+  assert.ok(!JSON.stringify(list).includes("sk-test"));
+  await kernel.call("vault.remove", { name: "model.cloud" });
+  assert.equal((await kernel.call("model.hasKey", {})).present, false);
+  assert.ok(!(await kernel.call("vault.list", {})).some((e) => e.name === "model.cloud"));
 });

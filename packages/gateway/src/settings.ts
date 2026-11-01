@@ -4,6 +4,7 @@ import { AppleOnDeviceProvider } from "./providers/apple.js";
 import { ChatGPTPlanProvider } from "./providers/chatgpt.js";
 import type { ModelProvider } from "./providers/types.js";
 import type { KernelCaller } from "./gateway.js";
+import { kernelFetch, type ModelFetch } from "./providers/kernel-fetch.js";
 
 /** chatgpt: the user's ChatGPT plan via sign-in (no key). The others use an API key. */
 export type CloudKind = "chatgpt" | "gemini" | "anthropic" | "openai-compatible";
@@ -58,14 +59,14 @@ export function rankGeminiModels(ids: string[]): string[] {
  * Catalogues list models that are retired, out of free quota or overloaded.
  * Send each a tiny request in parallel and return the ones that answered, in the order given.
  */
-export async function probeModels(baseUrl: string, apiKey: string, models: string[], timeoutMs = 12_000): Promise<string[]> {
+export async function probeModels(baseUrl: string, send: ModelFetch, models: string[], timeoutMs = 12_000): Promise<string[]> {
   const results = await Promise.all(
     models.map(async (model) => {
       try {
-        const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+        const res = await send(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
           method: "POST",
           signal: AbortSignal.timeout(timeoutMs),
-          headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+          headers: { "content-type": "application/json" },
           body: JSON.stringify({ model, messages: [{ role: "user", content: "Reply with OK." }], max_tokens: 5 }),
         });
         return res.ok;
@@ -82,36 +83,32 @@ export function pickGeminiModel(ids: string[]): string {
 }
 
 /**
- * The cloud API key is fetched from the kernel's vault by the caller. ChatGPT
- * needs no key here: requests go through the kernel, which holds the sign-in.
+ * Cloud API keys stay in the kernel: cloud requests go through it (model.fetch),
+ * and ChatGPT requests use the sign-in it holds.
  */
-export function createProvider(s: ModelSettings, cloudKey: string | null, kernel?: KernelCaller): ModelProvider {
+export function createProvider(s: ModelSettings, kernel: KernelCaller): ModelProvider {
   if (s.active === "builtin") return new AppleOnDeviceProvider();
-  if (s.active === "cloud" && s.cloud.kind === "chatgpt") {
-    if (!kernel) throw new Error("ChatGPT needs the kernel connection.");
-    return new ChatGPTPlanProvider(kernel, s.cloud.model);
-  }
+  if (s.active === "cloud" && s.cloud.kind === "chatgpt") return new ChatGPTPlanProvider(kernel, s.cloud.model);
   if (s.active === "local") {
     return new OpenAICompatibleProvider({ baseUrl: s.local.baseUrl, model: s.local.model, label: `${s.local.model} (local)`, locality: "local" });
   }
-  if (!cloudKey) throw new Error("Add your cloud model API key in Settings first.");
   const model = s.cloud.model || cloudDefaultModel(s.cloud.kind);
   if (s.cloud.kind === "gemini") {
     return new OpenAICompatibleProvider({
       baseUrl: GEMINI_BASE_URL,
       model,
-      apiKey: cloudKey,
+      fetch: kernelFetch(kernel, "bearer"),
       label: `Gemini (${model})`,
       locality: "cloud",
       strictSchemas: true,
       fallbackModels: (s.cloud.fallbacks ?? []).filter((m) => m !== model),
     });
   }
-  if (s.cloud.kind === "anthropic") return new AnthropicProvider({ apiKey: cloudKey, model, baseUrl: s.cloud.baseUrl });
+  if (s.cloud.kind === "anthropic") return new AnthropicProvider({ fetch: kernelFetch(kernel, "x-api-key"), model, baseUrl: s.cloud.baseUrl });
   return new OpenAICompatibleProvider({
     baseUrl: s.cloud.baseUrl || "https://api.openai.com/v1",
     model,
-    apiKey: cloudKey,
+    fetch: kernelFetch(kernel, "bearer"),
     label: model,
     locality: "cloud",
   });

@@ -2,6 +2,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { strictTool, pickGeminiModel, rankGeminiModels, createProvider, defaultModelSettings, pickTools, dateContext } from "@uab/gateway";
 
+// Stands in for the kernel: cloud requests go to it, and it would add the key.
+const fakeKernel = {
+  async call(method, p) {
+    assert.equal(method, "model.fetch");
+    assert.ok(!JSON.stringify(p.headers ?? {}).toLowerCase().includes("authorization"));
+    const r = await globalThis.fetch(p.url, { method: p.method, body: p.body });
+    return { status: r.status, text: await r.text() };
+  },
+};
+
 test("models get today's and tomorrow's dates ready-made", () => {
   const text = dateContext(new Date(2026, 10, 1, 16, 5)); // Sun 1 Nov 2026, 16:05
   assert.match(text, /today: Sunday 2026-11-01/);
@@ -71,7 +81,7 @@ test("busy models are skipped and the next one answers", async () => {
     const s = defaultModelSettings();
     s.active = "cloud";
     s.cloud = { kind: "gemini", model: "busy-1", fallbacks: ["ok-2", "ok-3"] };
-    const p = createProvider(s, "AIza-test");
+    const p = createProvider(s, fakeKernel);
     const r1 = await p.chat({ system: "", messages: [{ role: "user", content: "x" }], tools: [] });
     assert.equal(r1.text, "hi from ok-2");
     // Second turn goes straight to the model that worked.
@@ -90,7 +100,7 @@ test("a rejected request is not retried on other models", async () => {
     const s = defaultModelSettings();
     s.active = "cloud";
     s.cloud = { kind: "gemini", model: "m1", fallbacks: ["m2"] };
-    await assert.rejects(createProvider(s, "AIza-test").chat({ system: "", messages: [], tools: [] }), /400/);
+    await assert.rejects(createProvider(s, fakeKernel).chat({ system: "", messages: [], tools: [] }), /400/);
     assert.equal(n, 1);
   } finally {
     globalThis.fetch = realFetch;
@@ -100,8 +110,7 @@ test("a rejected request is not retried on other models", async () => {
 test("Gemini provider is set up from settings", () => {
   const s = defaultModelSettings();
   s.active = "cloud";
-  const p = createProvider(s, "AIza-test");
+  const p = createProvider(s, fakeKernel);
   assert.equal(p.locality, "cloud");
   assert.match(p.label, /^Gemini/);
-  assert.throws(() => createProvider(s, null), /API key/);
 });

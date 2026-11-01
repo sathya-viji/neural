@@ -39,16 +39,13 @@
         </header>
         <div class="transcript" id="transcript">
           <div class="empty" id="ask-empty">
-            <p>Say what you want. The AI works out the steps; the kernel checks each one against your permissions and asks you before anything important happens.</p>
-            <div class="chips">
-              <button class="chip">Find the Q3 report and email it to Sam</button>
-              <button class="chip">What files did I change this week in Documents?</button>
-              <button class="chip">Summarise the newest file in Downloads</button>
-            </div>
+            <p>Just say what you want, in your own words. The AI works out the steps, and the kernel checks each one: it does everyday things straight away and asks you before anything is sent, changed, ordered or deleted.</p>
+            <p class="hint">Try one of these:</p>
+            <div class="chips" id="suggestions"></div>
           </div>
         </div>
         <form class="composer" id="composer">
-          <textarea id="input" rows="1" placeholder="e.g. Find the Q3 report and send it to Sam" autocomplete="off"></textarea>
+          <textarea id="input" rows="1" placeholder="Ask for anything… e.g. What’s on my calendar tomorrow?" autocomplete="off"></textarea>
           <button type="submit" class="primary" id="send">Go</button>
           <button type="button" class="ghost hidden" id="stop">Stop</button>
         </form>
@@ -80,8 +77,7 @@
         <header class="view-head">
           <h1>Services</h1>
           <div class="row">
-            <button class="ghost" id="edit-services">Edit services.json</button>
-            <button class="ghost" id="reload-services">Reconnect</button>
+            <button class="ghost" id="reload-services">Reconnect all</button>
           </div>
         </header>
         <h2>Accounts</h2>
@@ -104,17 +100,20 @@
           </div>
         </div>
         <h2>Connected services</h2>
-        <p class="lede">Services give the AI things it can do. Built-in services run inside the kernel. Add any MCP server in <code>services.json</code>, using the same format as other MCP apps. Secrets can be referenced as <code>"vault:NAME"</code> so they never sit in the file.</p>
+        <p class="lede">Services give the AI things it can do. Built-in ones come with the app. You can add more: many companies offer an <b>MCP</b> address for AI apps (for example Zomato's is <code>https://mcp-server.zomato.com/mcp</code>).</p>
         <div id="services-list" class="stack"></div>
-        <pre class="example">{
-  "mcpServers": {
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "vault:github.token" }
-    }
-  }
-}</pre>
+
+        <h2>Add a service</h2>
+        <div class="card" id="add-service">
+          <label>Name <input id="svc-name" placeholder="e.g. Zomato" autocomplete="off" /></label>
+          <label>Address <input id="svc-url" placeholder="https://…/mcp" autocomplete="off" spellcheck="false" /></label>
+          <details class="advanced">
+            <summary>Run a program on this Mac instead</summary>
+            <label>Command <input id="svc-command" placeholder="npx -y @modelcontextprotocol/server-github" autocomplete="off" spellcheck="false" /></label>
+            <p class="hint">For programs that need a secret, edit <button class="link" id="edit-services">services.json</button> and refer to it as <code>"vault:NAME"</code> so it never sits in the file.</p>
+          </details>
+          <div class="row"><button class="primary" id="svc-add">Add service</button><span class="hint" id="svc-status"></span></div>
+        </div>
       </section>
 
       <!-- Settings -->
@@ -167,6 +166,10 @@
           <div class="hint" id="cloud-status"></div>
         </div>
         <button class="primary" id="save-settings">Save</button>
+
+        <h2>Saved sign-ins and keys</h2>
+        <p class="lede">Kept in your Mac's Keychain by the kernel. The AI and this window never see them. Removing one signs you out of it.</p>
+        <div id="vault-list" class="stack"></div>
 
         <h2>Your data</h2>
         <p class="lede">Settings, permissions, the activity history and the outbox are kept on this computer in <code id="home-path"></code>. There is no telemetry.</p>

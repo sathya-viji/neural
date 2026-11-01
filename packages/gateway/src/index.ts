@@ -4,6 +4,7 @@ export { AnthropicProvider } from "./providers/anthropic.js";
 export { OpenAICompatibleProvider } from "./providers/openai.js";
 export type { ModelProvider, Message, ChatRequest, ChatResponse, ToolCall, ToolSpec } from "./providers/types.js";
 export { ProviderError } from "./providers/types.js";
+export { kernelFetch, type ModelFetch } from "./providers/kernel-fetch.js";
 export { strictTool } from "./providers/openai.js";
 export { ChatGPTPlanProvider } from "./providers/chatgpt.js";
 export { AppleOnDeviceProvider, appleModelAvailability, pickTools, APPLE_HELPER } from "./providers/apple.js";

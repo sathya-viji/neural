@@ -1,8 +1,10 @@
 import type { ChatRequest, ChatResponse, Message, ModelProvider } from "./types.js";
 import { ProviderError } from "./types.js";
+import type { ModelFetch } from "./kernel-fetch.js";
 
 export interface AnthropicOptions {
-  apiKey: string;
+  /** Requests go through the kernel, which adds the API key. */
+  fetch: ModelFetch;
   model?: string;
   baseUrl?: string;
 }
@@ -26,12 +28,11 @@ export class AnthropicProvider implements ModelProvider {
   }
 
   async chat(req: ChatRequest): Promise<ChatResponse> {
-    const res = await fetch(`${this.options.baseUrl ?? "https://api.anthropic.com"}/v1/messages`, {
+    const res = await this.options.fetch(`${this.options.baseUrl ?? "https://api.anthropic.com"}/v1/messages`, {
       method: "POST",
       signal: req.signal,
       headers: {
         "content-type": "application/json",
-        "x-api-key": this.options.apiKey,
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({

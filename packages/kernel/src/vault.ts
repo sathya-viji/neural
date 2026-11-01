@@ -45,6 +45,31 @@ export class Vault {
     return (await this.get(name)) !== null;
   }
 
+  async remove(name: string): Promise<void> {
+    if (this.useKeychain) {
+      await run("security", ["delete-generic-password", "-s", SERVICE, "-a", name]).catch(() => {});
+    } else {
+      const data = readJson<Record<string, string>>(this.filePath, {});
+      delete data[name];
+      writeJson(this.filePath, data);
+    }
+  }
+
+  /**
+   * Names of the secrets that hold something, from a list of names to check.
+   * Only names: values never leave this class except to the code that uses them.
+   */
+  async present(candidates: string[]): Promise<string[]> {
+    const names = this.useKeychain ? candidates : [...new Set([...candidates, ...Object.keys(readJson<Record<string, string>>(this.filePath, {}))])];
+    const found = await Promise.all(
+      names.map(async (n) => {
+        const v = await this.get(n);
+        return v !== null && !["", "null", "{}"].includes(v.trim()) ? n : null;
+      }),
+    );
+    return found.filter((n): n is string => !!n);
+  }
+
   /** Replace "vault:NAME" references in service config with real values. */
   async resolveRefs(env: Record<string, string> = {}): Promise<Record<string, string>> {
     const out: Record<string, string> = {};

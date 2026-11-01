@@ -150,6 +150,10 @@ export interface KernelMethods {
   "services.reload": { params: {}; result: ServiceInfo[] };
   "services.signIn": { params: { id: string }; result: { url: string } };
   "services.signOut": { params: { id: string }; result: ServiceInfo[] };
+  "vault.list": { params: {}; result: { name: string; label: string }[] };
+  "vault.remove": { params: { name: string }; result: {} };
+  "services.add": { params: { name: string; url?: string; command?: string }; result: { id: string } };
+  "services.remove": { params: { id: string }; result: ServiceInfo[] };
   "task.start": { params: { intent: string }; result: { taskId: string } };
   "task.end": { params: { taskId: string; summary: string }; result: {} };
   "tasks.list": { params: { limit?: number }; result: TaskRecord[] };
@@ -163,7 +167,12 @@ export interface KernelMethods {
   "audit.verify": { params: {}; result: { ok: boolean; entries: number; brokenAt?: number } };
   "vault.set": { params: { name: string; value: string }; result: {} };
   "vault.has": { params: { name: string }; result: { present: boolean } };
-  "vault.getModelKey": { params: { name: string }; result: { value: string | null } };
+  "model.saveKey": { params: { value: string; endpoint?: string }; result: {} };
+  "model.hasKey": { params: {}; result: { present: boolean } };
+  "model.fetch": {
+    params: { url: string; method?: string; body?: string; auth: "bearer" | "x-api-key"; headers?: Record<string, string>; timeoutMs?: number };
+    result: { status: number; text: string };
+  };
   "gmail.status": { params: {}; result: GmailStatus };
   "gmail.configure": { params: { clientId: string; clientSecret: string }; result: GmailStatus };
   /** Returns Google's sign-in page for the host to open; sign-in completes in the background. */

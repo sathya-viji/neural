@@ -1,3 +1,4 @@
+import type { ModelFetch } from "./kernel-fetch.js";
 import type { ChatRequest, ChatResponse, Message, ModelProvider, ToolSpec } from "./types.js";
 import { ProviderError } from "./types.js";
 
@@ -5,7 +6,8 @@ export interface OpenAICompatibleOptions {
   /** e.g. http://localhost:11434/v1 for Ollama, https://api.openai.com/v1 for OpenAI */
   baseUrl: string;
   model: string;
-  apiKey?: string;
+  /** For cloud providers: send requests through the kernel, which adds the key. */
+  fetch?: ModelFetch;
   label?: string;
   locality?: "local" | "cloud";
   /** Some servers (Gemini) accept only a subset of JSON Schema in tool definitions. */
@@ -68,12 +70,11 @@ export class OpenAICompatibleProvider implements ModelProvider {
   private async attempt(model: string, req: ChatRequest): Promise<ChatResponse> {
     const timeout = AbortSignal.timeout(this.options.timeoutMs ?? (this.locality === "local" ? 180_000 : 20_000));
     const signal = req.signal ? AbortSignal.any([req.signal, timeout]) : timeout;
-    const res = await fetch(`${this.options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    const res = await (this.options.fetch ?? fetch)(`${this.options.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       signal,
       headers: {
         "content-type": "application/json",
-        ...(this.options.apiKey ? { authorization: `Bearer ${this.options.apiKey}` } : {}),
       },
       body: JSON.stringify({
         model,

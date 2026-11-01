@@ -4,7 +4,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { KernelClient } from "@uab/kernel/client";
@@ -14,6 +14,7 @@ let base;
 let kernel;
 const issued = { code: "code-1", token: "token-1" };
 let challenge;
+const approvals = [];
 
 const service = createServer(async (req, res) => {
   const url = new URL(req.url, base);
@@ -83,7 +84,7 @@ before(async () => {
   writeFileSync(join(home, "services.json"), JSON.stringify({ mcpServers: { food: { url: `${base}/mcp` } } }));
   kernel = new KernelClient({ env: { UAB_HOME: home, UAB_VAULT_FILE: "1", UAB_DEMO_SERVICES: "1" } });
   await kernel.start();
-  kernel.onEvent("approval.requested", (req) => kernel.call("approvals.resolve", { approvalId: req.approvalId, approve: true }));
+  kernel.onEvent("approval.requested", (req) => (approvals.push(req), kernel.call("approvals.resolve", { approvalId: req.approvalId, approve: true })));
 });
 
 after(() => {
@@ -114,6 +115,9 @@ test("sign in on the service's page, then use its tools through the kernel", asy
 
   const s = await food();
   assert.equal(s.capabilityCount, 2);
+  assert.equal(s.title, "Food");
+  const caps = await kernel.call("capabilities.list", {});
+  assert.equal(caps.find((c) => c.id === "mcp.food.place_order").title, "Place order");
   assert.equal(s.signedIn, true);
 
   const { taskId } = await kernel.call("task.start", { intent: "order food" });
@@ -124,6 +128,8 @@ test("sign in on the service's page, then use its tools through the kernel", asy
   const order = await kernel.call("propose", { taskId, capability: "mcp.food.place_order", args: { item: "biryani" }, source: "agent" });
   assert.equal(order.status, "executed");
   assert.equal(order.approvedBy, "user");
+  // The approval card is written by the kernel, in words.
+  assert.equal(approvals.at(-1).summary, "Food: Place order — item: biryani");
   assert.match(order.result.content, /place_order/);
 });
 
@@ -134,4 +140,18 @@ test("signing in survives a kernel restart; signing out removes the service's to
   assert.equal(list.find((s) => s.id === "mcp.food").status, "signin");
   const caps = await kernel.call("capabilities.list", {});
   assert.ok(!caps.some((c) => c.service === "mcp.food"));
+});
+
+test("services can be added and removed without editing the file", async () => {
+  await assert.rejects(kernel.call("services.add", { name: "Bad", url: "http://example.com/mcp" }), /https/);
+  await assert.rejects(kernel.call("services.add", { name: "Files", url: "https://example.com/mcp" }), /built-in/);
+  const { id } = await kernel.call("services.add", { name: "My Shop", url: "https://shop.example.com/mcp" });
+  assert.equal(id, "mcp.my-shop");
+  const config = JSON.parse(readFileSync(join(home, "services.json"), "utf8"));
+  assert.deepEqual(config.mcpServers["my-shop"], { title: "My Shop", url: "https://shop.example.com/mcp" });
+  await assert.rejects(kernel.call("services.add", { name: "my shop", url: "https://shop.example.com/mcp" }), /already/);
+  await kernel.call("services.reload", {});
+  const list = await kernel.call("services.remove", { id });
+  assert.ok(!list.some((s) => s.id === id));
+  assert.ok(!JSON.parse(readFileSync(join(home, "services.json"), "utf8")).mcpServers["my-shop"]);
 });

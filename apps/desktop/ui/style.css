@@ -157,7 +157,8 @@ button.ghost:hover { border-color: color-mix(in srgb, var(--text) 25%, var(--lin
 .approval details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
 .approval pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; overflow: auto; margin: 6px 0 0; max-height: 220px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .approval .reason { font-size: 12.5px; color: var(--muted); }
-.approval .actions { display: flex; gap: 8px; }
+.approval .actions { display: flex; gap: 8px; align-items: center; }
+.approval .actions .always { margin-left: 6px; font-size: 12.5px; }
 .approval.resolved { opacity: 0.6; }
 .approval.resolved .actions { display: none; }
 
@@ -187,7 +188,13 @@ button.ghost:hover { border-color: color-mix(in srgb, var(--text) 25%, var(--lin
 .cap .name { font-weight: 500; }
 .cap .desc { color: var(--muted); font-size: 12.5px; }
 .cap .facts { display: flex; gap: 6px; margin-top: 4px; }
-.service-group { font-weight: 600; margin: 12px 0 0; font-size: 13px; }
+.service-group { display: grid; gap: 8px; }
+.service-group > summary { cursor: pointer; display: flex; align-items: baseline; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); list-style: none; }
+.service-group > summary::-webkit-details-marker { display: none; }
+.service-group > summary::before { content: "›"; color: var(--muted); transition: transform 0.15s; display: inline-block; }
+.service-group[open] > summary::before { transform: rotate(90deg); }
+.service-group .group-name { font-weight: 600; }
+.service-group .cap { margin-left: 18px; }
 .segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
 .segmented button { border: 0; background: none; padding: 5px 12px; cursor: pointer; color: var(--muted); }
 .segmented button + button { border-left: 1px solid var(--line); }
@@ -215,3 +222,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb
 .service-actions { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 button.small { padding: 4px 10px; font-size: 12.5px; }
 .transcript > *, .approval, .step { min-width: 0; }
+/* Long results (web pages, service data) stay inside the Activity list. */
+.task, .task > *, .entry > * { min-width: 0; }
+.task-summary { overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.entry > div:nth-child(2) { overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

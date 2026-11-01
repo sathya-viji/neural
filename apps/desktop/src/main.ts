@@ -15,6 +15,7 @@ import {
   appleModelAvailability,
   cloudModelsUrl,
   createProvider,
+  kernelFetch,
   defaultModelSettings,
   describeModelSettings,
   pickGeminiModel,
@@ -67,10 +68,9 @@ function send(channel: string, payload: unknown): void {
 async function ask(text: string): Promise<void> {
   if (running) throw new Error("Already working on something. Stop it or wait.");
   const settings = loadSettings();
-  const key = settings.active === "cloud" ? (await kernel.call("vault.getModelKey", { name: "model.cloud" })).value : null;
   let gateway: Gateway;
   try {
-    gateway = new Gateway(kernel, createProvider(settings, key, kernel));
+    gateway = new Gateway(kernel, createProvider(settings, kernel));
   } catch (err) {
     send("gateway", { type: "error", message: (err as Error).message });
     send("gateway", { type: "done", text: (err as Error).message, taskId: "" });
@@ -109,10 +109,10 @@ async function ask(text: string): Promise<void> {
 async function listCloudModels(cloud: ModelSettings["cloud"]): Promise<{ ok: boolean; models: string[]; error?: string }> {
   const url = cloudModelsUrl(cloud);
   if (!url) return { ok: true, models: [] };
-  const key = (await kernel.call("vault.getModelKey", { name: "model.cloud" })).value;
-  if (!key) return { ok: false, models: [], error: "No API key saved yet." };
+  if (!(await kernel.call("model.hasKey", {})).present) return { ok: false, models: [], error: "No API key saved yet." };
   try {
-    const res = await fetch(url, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000) });
+    // The kernel adds the key; it never comes to this process.
+    const res = await kernelFetch(kernel, "bearer", 8000)(url, {});
     if (!res.ok) {
       const text = await res.text();
       return { ok: false, models: [], error: res.status === 400 || res.status === 401 || res.status === 403 ? "The provider rejected this API key." : `${res.status}: ${text.slice(0, 160)}` };
@@ -178,6 +178,12 @@ function registerIpc(): void {
     return {};
   });
   handle("services.signOut", (id: string) => kernel.call("services.signOut", { id: String(id) }));
+  handle("services.add", (input: { name?: string; url?: string; command?: string }) =>
+    kernel.call("services.add", { name: String(input?.name ?? ""), url: input?.url ? String(input.url) : undefined, command: input?.command ? String(input.command) : undefined }),
+  );
+  handle("services.remove", (id: string) => kernel.call("services.remove", { id: String(id) }));
+  handle("vault.list", () => kernel.call("vault.list", {}));
+  handle("vault.remove", (name: string) => kernel.call("vault.remove", { name: String(name) }));
   handle("services.edit", () => shell.openPath(join(kernelHome, "services.json")));
 
   handle("gmail.status", () => kernel.call("gmail.status", {}));
@@ -220,11 +226,10 @@ function registerIpc(): void {
     let working: string[] | undefined;
     if (s.cloud.kind === "gemini" && s.active === "cloud") {
       const listed = await listCloudModels(s.cloud);
-      const key = (await kernel.call("vault.getModelKey", { name: "model.cloud" })).value;
-      if (listed.ok && key) {
+      if (listed.ok) {
         const ranked = rankGeminiModels(listed.models).slice(0, 10);
         const candidates = s.cloud.model && !ranked.includes(s.cloud.model) ? [s.cloud.model, ...ranked] : ranked;
-        working = await probeModels(GEMINI_BASE_URL, key, candidates);
+        working = await probeModels(GEMINI_BASE_URL, kernelFetch(kernel, "bearer", 15_000), candidates);
         if (working.length) {
           // Keep the user's choice if it works; otherwise the best one that answered.
           if (!s.cloud.model || !working.includes(s.cloud.model)) s.cloud.model = working[0];
@@ -240,8 +245,12 @@ function registerIpc(): void {
     return { model: describeModelSettings(s), settings: s, working };
   });
   handle("cloud.models", (cloud: ModelSettings["cloud"]) => listCloudModels(cloud));
-  handle("key.set", (value: string) => kernel.call("vault.set", { name: "model.cloud", value: String(value) }));
-  handle("key.has", () => kernel.call("vault.has", { name: "model.cloud" }));
+  // The key goes straight to the kernel, with the address it's for, and never comes back out.
+  handle("key.set", (value: string, cloud?: ModelSettings["cloud"]) => {
+    const endpoint = cloud?.kind === "openai-compatible" ? cloud.baseUrl || "https://api.openai.com/v1" : cloud?.kind === "anthropic" ? cloud.baseUrl : undefined;
+    return kernel.call("model.saveKey", { value: String(value), endpoint: endpoint ? String(endpoint) : undefined });
+  });
+  handle("key.has", () => kernel.call("model.hasKey", {}));
   handle("builtin.status", () => appleModelAvailability());
   handle("local.models", async (baseUrl: string) => {
     try {

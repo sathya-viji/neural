@@ -23,8 +23,21 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-const SERVICE_NAMES = { files: "Files", contacts: "Contacts", mail: "Apple Mail", gmail: "Gmail", calendar: "Calendar", reminders: "Reminders", system: "This computer" };
-const serviceName = (id) => SERVICE_NAMES[id] ?? id.replace(/^mcp\./, "");
+const SERVICE_NAMES = { files: "Files", contacts: "Contacts", mail: "Apple Mail", gmail: "Gmail", calendar: "Calendar", reminders: "Reminders", web: "Web & weather", browser: "Built-in browser", system: "This computer" };
+// Titles of connected services (e.g. "Zomato"), kept up to date from the kernel.
+const serviceTitles = new Map();
+const serviceName = (id) => serviceTitles.get(id) ?? SERVICE_NAMES[id] ?? id.replace(/^mcp\./, "");
+function rememberServices(list) {
+  for (const s of list) serviceTitles.set(s.id, s.title.replace(/ \(.*\)$/, ""));
+}
+
+// What an action does, in plain words.
+const EFFECT_WORDS = { read: "Only looks", write: "Changes something", send: "Sends or orders", delete: "Deletes something" };
+const RISK_WORDS = { low: "Low risk", medium: "Medium risk", high: "High risk" };
+function effectBadges(cap) {
+  const effects = cap.effects.includes("read") && cap.effects.length > 1 ? cap.effects.filter((x) => x !== "read") : cap.effects;
+  return [el("span", { class: `badge ${cap.risk}` }, RISK_WORDS[cap.risk] ?? cap.risk), ...effects.map((x) => el("span", { class: "badge" }, EFFECT_WORDS[x] ?? x))];
+}
 
 /* ---------------- navigation ---------------- */
 
@@ -86,7 +99,20 @@ function autosize() {
   input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
 }
 input.addEventListener("input", autosize);
-document.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => submit(c.textContent)));
+/** Things to try, based on what's connected right now. */
+function loadSuggestions(services) {
+  const on = new Set(services.filter((s) => s.status === "connected").map((s) => s.id));
+  const ideas = [
+    on.has("mcp.zomato") && "Find good biryani places near me on Zomato",
+    on.has("calendar") && "What's on my calendar tomorrow?",
+    on.has("gmail") && "Any important emails today?",
+    on.has("reminders") && "Remind me to call the bank tomorrow at 10am",
+    on.has("web") && "What's the weather this weekend?",
+    on.has("files") && "What did I save in Downloads this week?",
+    ...services.filter((s) => s.kind === "mcp" && s.status === "connected" && s.id !== "mcp.zomato").map((s) => `What can you do with ${s.title}?`),
+  ].filter(Boolean);
+  $("#suggestions")?.replaceChildren(...ideas.slice(0, 4).map((text) => el("button", { class: "chip", onclick: () => submit(text) }, text)));
+}
 $("#stop").addEventListener("click", () => uab.call("stop"));
 $("#new-conversation").addEventListener("click", async () => {
   await uab.call("conversation.new");
@@ -148,6 +174,7 @@ function onGateway(e) {
 
 function briefArgs(args) {
   const s = Object.entries(args ?? {})
+    .filter(([, v]) => v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length))
     .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : typeof v === "object" ? JSON.stringify(v) : v}`)
     .join(" · ");
   return s.length > 160 ? s.slice(0, 160) + "…" : s;
@@ -191,23 +218,20 @@ function showApproval(req) {
   const node = el(
     "div",
     { class: "approval" },
-    el("div", { class: "who" }, "Kernel · your approval needed"),
+    el("div", { class: "who" }, `${serviceName(cap.service)} · needs your OK`),
     el("div", { class: "summary" }, req.summary),
-    el(
-      "div",
-      { class: "facts" },
-      el("span", { class: `badge ${cap.risk}` }, `${cap.risk} risk`),
-      ...cap.effects.map((x) => el("span", { class: "badge" }, x)),
-      el("span", { class: "badge" }, serviceName(cap.service)),
-      el("span", { class: "badge" }, `asked by ${req.model ?? req.source}`),
-    ),
+    el("div", { class: "facts" }, ...effectBadges(cap), el("span", { class: "badge" }, `Suggested by ${req.model ?? req.source}`)),
     req.reason ? el("div", { class: "reason" }, "The AI's reason (not verified): ", req.reason) : null,
     el("details", {}, el("summary", {}, "Exact details"), el("pre", {}, JSON.stringify(req.args, null, 2))),
     el(
       "div",
       { class: "actions" },
-      el("button", { class: "primary", onclick: () => resolveApproval(req.approvalId, true) }, "Allow once"),
+      el("button", { class: "primary", onclick: () => resolveApproval(req.approvalId, true) }, "Allow"),
       el("button", { class: "ghost", onclick: () => resolveApproval(req.approvalId, false) }, "Decline"),
+      // Never offered for high-risk actions (sending, paying, deleting): those always ask.
+      cap.risk !== "high"
+        ? el("button", { class: "link always", title: `Change ${cap.title} to Allow in Permissions`, onclick: async () => (await uab.call("policy.set", cap.id, "allow"), resolveApproval(req.approvalId, true)) }, `Always allow "${cap.title}"`)
+        : null,
     ),
   );
   approvalNodes.set(req.approvalId, node);
@@ -223,13 +247,15 @@ function onApprovalResolved({ approvalId, approved }) {
   const node = approvalNodes.get(approvalId);
   if (!node) return;
   node.classList.add("resolved");
-  node.querySelector(".who").textContent = approved ? "Kernel · you allowed this" : "Kernel · you declined this";
+  node.querySelector(".who").textContent = approved ? "✓ You allowed this" : "✕ You declined this";
 }
 
 /* ---------------- Activity ---------------- */
 
 async function loadActivity() {
-  const [tasks, entries, verify] = await Promise.all([uab.call("tasks"), uab.call("audit"), uab.call("audit.verify")]);
+  const [tasks, entries, verify, caps] = await Promise.all([uab.call("tasks"), uab.call("audit"), uab.call("audit.verify"), uab.call("capabilities")]);
+  const titles = new Map(caps.map((c) => [c.id, `${serviceName(c.service)}: ${c.title}`]));
+  const OUTCOME_WORDS = { executed: "done", denied: "declined", failed: "failed" };
   const integrity = $("#integrity");
   integrity.className = `integrity ${verify.ok ? "ok" : "bad"}`;
   integrity.textContent = verify.ok ? `✓ History intact · ${verify.entries} records` : `✕ History was changed at record ${verify.brokenAt}`;
@@ -255,8 +281,8 @@ async function loadActivity() {
           el(
             "div",
             { class: "entry" },
-            el("div", { class: `outcome ${e.outcome}` }, e.outcome),
-            el("div", {}, el("b", {}, e.capability), " — ", firstLines(e.detail, 1)),
+            el("div", { class: `outcome ${e.outcome}` }, OUTCOME_WORDS[e.outcome] ?? e.outcome),
+            el("div", {}, el("b", {}, titles.get(e.capability) ?? e.capability), " — ", firstLines(e.detail, 1)),
             el("div", { class: "who" }, e.approvedBy === "user" ? "approved by you" : e.approvedBy === "policy" ? "allowed by policy" : ""),
           ),
         ),
@@ -287,7 +313,18 @@ async function loadPermissions() {
   const box = $("#caps");
   box.replaceChildren();
   for (const [service, list] of groups) {
-    box.append(el("div", { class: "service-group" }, serviceName(service)));
+    const asking = list.filter((c) => policy.effective[c.id] === "ask").length;
+    const group = el(
+      "details",
+      { class: "service-group", open: openGroups.has(service) ? true : undefined, ontoggle: (e) => (e.target.open ? openGroups.add(service) : openGroups.delete(service)) },
+      el(
+        "summary",
+        {},
+        el("span", { class: "group-name" }, serviceName(service)),
+        el("span", { class: "hint" }, `${list.length} ${list.length === 1 ? "action" : "actions"}${asking ? ` · ${asking} ask first` : ""}`),
+      ),
+    );
+    box.append(group);
     for (const c of list) {
       const current = policy.effective[c.id];
       const seg = el(
@@ -297,7 +334,7 @@ async function loadPermissions() {
           el("button", { "data-p": p, class: current === p ? "on" : "", onclick: async () => (await uab.call("policy.set", c.id, p), loadPermissions()) }, label),
         ),
       );
-      box.append(
+      group.append(
         el(
           "div",
           { class: "cap" },
@@ -306,7 +343,7 @@ async function loadPermissions() {
             {},
             el("div", { class: "name" }, c.title),
             el("div", { class: "desc" }, c.description.length > 180 ? c.description.slice(0, 180) + "…" : c.description),
-            el("div", { class: "facts" }, el("span", { class: `badge ${c.risk}` }, `${c.risk} risk`), ...c.effects.map((x) => el("span", { class: "badge" }, x))),
+            el("div", { class: "facts" }, ...effectBadges(c)),
           ),
           seg,
         ),
@@ -314,6 +351,8 @@ async function loadPermissions() {
     }
   }
 }
+// Which service groups are expanded; remembered while the app is open.
+const openGroups = new Set(["files"]);
 $("#add-root").addEventListener("click", async () => (await uab.call("roots.add"), loadPermissions()));
 
 /* ---------------- Services ---------------- */
@@ -321,12 +360,13 @@ $("#add-root").addEventListener("click", async () => (await uab.call("roots.add"
 async function loadServices(list) {
   loadGmail();
   const services = list ?? (await uab.call("services"));
+  rememberServices(services);
   $("#services-list").replaceChildren(
     ...services.map((s) =>
       el(
         "div",
         { class: "service" },
-        el("div", {}, el("div", { class: "name" }, s.title), el("div", { class: "sub" }, `${s.kind === "builtin" ? "Built-in" : s.online ? "Online MCP service" : "MCP server"} · ${s.capabilityCount} capabilities`, s.error ? ` · ${s.error}` : "")),
+        el("div", {}, el("div", { class: "name" }, s.title), el("div", { class: "sub" }, `${s.kind === "builtin" ? "Built-in" : s.online ? "Online service" : "Program on this Mac"} · ${s.capabilityCount} ${s.capabilityCount === 1 ? "action" : "actions"}`, s.error ? ` · ${s.error}` : "")),
         el(
           "div",
           { class: "service-actions" },
@@ -334,6 +374,9 @@ async function loadServices(list) {
           s.status === "signin" ? (s.signingIn ? "waiting for sign-in…" : "not signed in") : s.status,
           s.online && (s.status === "signin" || s.status === "error") ? signInButton(s) : null,
           s.online && s.signedIn ? el("button", { class: "ghost small", onclick: () => uab.call("services.signOut", s.id).then(loadServices) }, "Sign out") : null,
+          s.kind === "mcp"
+            ? el("button", { class: "ghost small", onclick: async () => confirm(`Remove ${s.title}? The AI won't be able to use it, and its sign-in is forgotten.`) && loadServices(await uab.call("services.remove", s.id)) }, "Remove")
+            : null,
         ),
       ),
     ),
@@ -403,9 +446,22 @@ $("#reload-services").addEventListener("click", async (e) => {
     await loadServices(await uab.call("services.reload"));
   } finally {
     e.target.disabled = false;
-    e.target.textContent = "Reconnect";
+    e.target.textContent = "Reconnect all";
   }
 });
+$("#svc-add").addEventListener("click", async () => {
+  const status = $("#svc-status");
+  try {
+    await uab.call("services.add", { name: $("#svc-name").value, url: $("#svc-url").value, command: $("#svc-command").value });
+    for (const id of ["#svc-name", "#svc-url", "#svc-command"]) $(id).value = "";
+    status.className = "hint ok";
+    status.textContent = "Added. It appears in the list above in a moment; if it needs a sign-in, click Sign in there.";
+  } catch (err) {
+    status.className = "hint bad";
+    status.textContent = cleanError(err);
+  }
+});
+const cleanError = (err) => String(err.message).replace(/^Error invoking remote method '[^']+': (Error: )?/, "");
 
 /* ---------------- Settings ---------------- */
 
@@ -424,9 +480,30 @@ async function loadSettings() {
   $("#cloud-key").value = "";
   $("#cloud-key").placeholder = has.present ? "•••••••• saved in Keychain (type to replace)" : "Paste your API key";
   checkLocal();
+  loadVault();
   if (settings.cloud.kind === "chatgpt") loadChatGPT();
   else if (has.present) checkCloud();
   else setCloudStatus("", "No API key yet.");
+}
+
+async function loadVault() {
+  const items = await uab.call("vault.list");
+  $("#vault-list").replaceChildren(
+    ...(items.length
+      ? items.map((item) =>
+          el(
+            "div",
+            { class: "service" },
+            el("div", {}, el("div", { class: "name" }, item.label), el("div", { class: "sub" }, "Saved in Keychain")),
+            el(
+              "div",
+              { class: "service-actions" },
+              el("button", { class: "ghost small", onclick: async () => confirm(`Remove "${item.label}"? You'll need to sign in or paste it again to use it.`) && (await uab.call("vault.remove", item.name), loadVault()) }, "Remove"),
+            ),
+          ),
+        )
+      : [el("p", { class: "hint" }, "Nothing saved yet.")]),
+  );
 }
 
 function showKind(kind) {
@@ -545,7 +622,7 @@ $("#save-settings").addEventListener("click", async (e) => {
   const key = $("#cloud-key").value.trim();
   const problem = key ? keyProblem(settings.cloud.kind, key) : null;
   if (problem) return setCloudStatus("bad", problem);
-  if (key) await uab.call("key.set", key);
+  if (key) await uab.call("key.set", key, settings.cloud);
   e.target.disabled = true;
   if (settings.active === "cloud" && settings.cloud.kind === "gemini") {
     e.target.textContent = "Testing models…";
@@ -612,7 +689,7 @@ uab.on((channel, payload) => {
   else if (channel === "approval.requested") showApproval(payload);
   else if (channel === "approval.resolved") onApprovalResolved(payload);
   else if (channel === "audit.appended" && $("#view-activity").classList.contains("active")) loadActivity();
-  else if (channel === "services.changed") loadServices(payload);
+  else if (channel === "services.changed") (rememberServices(payload), loadServices(payload), loadSuggestions(payload));
   else if (channel === "chatgpt.changed" && settings?.cloud.kind === "chatgpt") loadChatGPT();
   else if (channel === "browser.state") onBrowserState(payload);
 });
@@ -624,6 +701,9 @@ uab.on((channel, payload) => {
   $("#identity").textContent = `${hello.identity.displayName} · kernel ${hello.version}`;
   $("#model-label").textContent = hello.model;
   $("#home-path").textContent = hello.home;
+  const services = await uab.call("services");
+  rememberServices(services);
+  loadSuggestions(services);
   for (const req of await uab.call("approvals.pending")) showApproval(req);
   input.focus();
 })();

@@ -10,6 +10,7 @@ import type { KernelEvent, KernelMethods, RpcRequest } from "@uab/protocol";
 import { Kernel, KERNEL_VERSION } from "./kernel.js";
 import { gmail } from "./builtin/gmail.js";
 import { chatgpt } from "./chatgpt.js";
+import { ModelKey } from "./model-key.js";
 
 type Handlers = { [M in keyof KernelMethods]: (params: KernelMethods[M]["params"]) => Promise<KernelMethods[M]["result"]> | KernelMethods[M]["result"] };
 
@@ -21,6 +22,8 @@ function send(message: object): void {
 
 const events: KernelEvent[] = ["approval.requested", "approval.resolved", "audit.appended", "services.changed"];
 for (const event of events) kernel.on(event, (params) => send({ jsonrpc: "2.0", method: event, params }));
+
+const modelKey = new ModelKey(kernel.vault);
 
 const handlers: Handlers = {
   "kernel.hello": () => ({ version: KERNEL_VERSION, identity: kernel.identity, home: kernel.home }),
@@ -34,6 +37,8 @@ const handlers: Handlers = {
   },
   "services.signIn": ({ id }) => kernel.hub.signIn(id),
   "services.signOut": async ({ id }) => (await kernel.hub.signOut(id), kernel.hub.services()),
+  "services.add": (input) => kernel.hub.addService(input),
+  "services.remove": async ({ id }) => (await kernel.hub.removeService(id), kernel.hub.services()),
   "task.start": ({ intent }) => ({ taskId: kernel.startTask(intent) }),
   "task.end": ({ taskId, summary }) => (kernel.endTask(taskId, summary), {}),
   "tasks.list": ({ limit }) => kernel.listTasks(limit),
@@ -51,11 +56,30 @@ const handlers: Handlers = {
   "audit.verify": () => kernel.audit.verify(),
   "vault.set": async ({ name, value }) => (await kernel.vault.set(name, value), {}),
   "vault.has": async ({ name }) => ({ present: await kernel.vault.has(name) }),
-  // The host needs model API keys to reach cloud models. Other secrets
-  // (service tokens) never leave the kernel.
-  "vault.getModelKey": async ({ name }) => {
-    if (!name.startsWith("model.")) throw new Error("Only model keys can be read from outside the kernel");
-    return { value: await kernel.vault.get(name) };
+  // Cloud model requests: the kernel adds the API key, which never leaves it.
+  "model.saveKey": async ({ value, endpoint }) => (await modelKey.save(value, endpoint), {}),
+  "model.hasKey": async () => ({ present: await modelKey.has() }),
+  "model.fetch": (req) => modelKey.fetch(req),
+  "vault.list": async () => {
+    const entries = [
+      { name: "model.cloud", label: "Cloud model API key (Gemini, Claude or other)" },
+      { name: "chatgpt.account", label: "ChatGPT sign-in" },
+      { name: "gmail.token", label: "Gmail sign-in" },
+      { name: "gmail.client", label: "Gmail app registration (OAuth client)" },
+      ...kernel.hub.vaultEntries(),
+    ];
+    const present = new Set(await kernel.vault.present(entries.map((e) => e.name)));
+    return entries.filter((e) => present.has(e.name)).map(({ name, label }) => ({ name, label }));
+  },
+  // Removing a sign-in signs out properly, so nothing keeps using a token in memory.
+  "vault.remove": async ({ name }) => {
+    if (name === "chatgpt.account") await chatgpt.disconnect();
+    else if (name === "gmail.token") await gmail.disconnect();
+    else if (name.startsWith("service.") && name.endsWith(".signin")) await kernel.hub.signOut(`mcp.${name.slice(8, -7)}`).catch(() => {});
+    await kernel.vault.remove(name);
+    if (name === "model.cloud") await kernel.vault.remove("model.cloud.endpoint");
+    if (name === "gmail.client") await gmail.init(kernel.vault), gmail.onChange();
+    return {};
   },
   "gmail.status": () => gmail.status(),
   "gmail.configure": async ({ clientId, clientSecret }) => (await gmail.configure(clientId, clientSecret), gmail.status()),

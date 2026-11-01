@@ -26,6 +26,8 @@ interface ServicesConfig {
       args?: string[];
       /** …or an online service. If it needs sign-in, the user signs in from Services. */
       url?: string;
+      /** The name shown to the user, e.g. "Zomato". */
+      title?: string;
       env?: Record<string, string>;
       disabled?: boolean;
       /** Override how the kernel classifies a tool: { "tool_name": { effects, risk } } */
@@ -87,7 +89,7 @@ export class ServiceHub {
 
   private async connectOne(id: string, def: ServicesConfig["mcpServers"][string]): Promise<void> {
     const service: McpService = {
-      info: { id: `mcp.${id}`, title: id, kind: "mcp", status: "disabled", capabilityCount: 0 },
+      info: { id: `mcp.${id}`, title: def.title || friendlyServiceName(id), kind: "mcp", status: "disabled", capabilityCount: 0 },
       capabilities: [],
       url: def.url,
     };
@@ -133,7 +135,7 @@ export class ServiceHub {
         return {
           id: `mcp.${id}.${t.name}`,
           service: `mcp.${id}`,
-          title: t.annotations?.title ?? t.title ?? t.name,
+          title: t.annotations?.title ?? t.title ?? humanize(t.name),
           description: t.description ?? "",
           inputSchema: t.inputSchema as Capability["inputSchema"],
           effects,
@@ -186,6 +188,63 @@ export class ServiceHub {
     this.onChange();
   }
 
+  /** What is kept in the vault for services, in words: sign-ins and secrets referenced as "vault:NAME". */
+  vaultEntries(): { name: string; label: string; service?: string }[] {
+    const config = readJson<ServicesConfig>(this.configPath, { mcpServers: {} });
+    return Object.entries(config.mcpServers ?? {}).flatMap(([id, def]) => {
+      const title = def.title || friendlyServiceName(id);
+      return [
+        ...(def.url ? [{ name: `service.${id}.signin`, label: `${title} sign-in`, service: `mcp.${id}` }] : []),
+        ...Object.values(def.env ?? {})
+          .filter((v) => v.startsWith("vault:"))
+          .map((v) => ({ name: v.slice(6), label: `Secret used by ${title}` })),
+      ];
+    });
+  }
+
+  /** Add a service to services.json. The file watcher connects it. */
+  addService(input: { name: string; url?: string; command?: string }): { id: string } {
+    const title = input.name.trim();
+    const id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    if (!id) throw new Error("Give the service a name.");
+    if (this.builtins.size && [...this.builtins.values()].some((c) => c.service === id)) throw new Error(`"${title}" is the name of a built-in service. Pick another name.`);
+    const config = readJson<ServicesConfig>(this.configPath, { mcpServers: {} });
+    config.mcpServers ??= {};
+    if (config.mcpServers[id]) throw new Error(`There's already a service called "${title}".`);
+    if (input.url?.trim()) {
+      let url: URL;
+      try {
+        url = new URL(input.url.trim());
+      } catch {
+        throw new Error("That address doesn't look right. It should start with https://");
+      }
+      if (url.protocol !== "https:" && !/^(127\.0\.0\.1|localhost|\[::1\])$/.test(url.hostname)) throw new Error("Online services must use https://");
+      config.mcpServers[id] = { title, url: url.toString() };
+    } else if (input.command?.trim()) {
+      const parts = input.command.trim().match(/"[^"]*"|\S+/g)!.map((p) => p.replace(/^"|"$/g, ""));
+      config.mcpServers[id] = { title, command: parts[0], args: parts.slice(1) };
+    } else {
+      throw new Error("Add the service's address (or a command to run).");
+    }
+    writeJson(this.configPath, config);
+    return { id: `mcp.${id}` };
+  }
+
+  /** Remove a service from services.json and forget its sign-in. */
+  async removeService(serviceId: string): Promise<void> {
+    const id = serviceId.replace(/^mcp\./, "");
+    const config = readJson<ServicesConfig>(this.configPath, { mcpServers: {} });
+    if (!config.mcpServers?.[id]) throw new Error(`No service called ${id}`);
+    const service = this.mcp.get(id);
+    this.pendingSignIn.get(id)?.();
+    await service?.client?.close().catch(() => {});
+    await service?.signIn?.signOut();
+    this.mcp.delete(id);
+    delete config.mcpServers[id];
+    writeJson(this.configPath, config);
+    this.onChange();
+  }
+
   async disconnect(): Promise<void> {
     await Promise.all([...this.mcp.values()].map((s) => s.client?.close().catch(() => {})));
     this.mcp.clear();
@@ -228,10 +287,10 @@ export class ServiceHub {
       }
     }
     const cap = this.get(id);
-    const shown = Object.entries(args)
-      .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
-      .join(", ");
-    return `${cap?.title ?? id}${shown ? ` (${shown.length > 200 ? shown.slice(0, 200) + "…" : shown})` : ""}`;
+    const service = this.services().find((x) => x.id === cap?.service);
+    const shown = describeArgs(args);
+    const title = cap?.title ?? id;
+    return `${service && cap?.service.startsWith("mcp.") ? `${service.title}: ` : ""}${title}${shown ? ` — ${shown}` : ""}`;
   }
 
   /** Run a capability. Only the kernel calls this, after authorisation. */
@@ -288,4 +347,41 @@ async function tryWithoutSignIn(url: string): Promise<boolean> {
   } catch {
     return true; // Let the real connection report the problem.
   }
+}
+
+/** "get_restaurants_for_keyword" → "Get restaurants for keyword". */
+export function humanize(name: string): string {
+  const words = name.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_\-.]+/g, " ").trim().toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function friendlyServiceName(id: string): string {
+  return id.split(/[-_]/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+/** Arguments in words for an approval card: no empty values, lists counted, long text cut. */
+export function describeArgs(args: Record<string, unknown>): string {
+  const value = (v: unknown): string | null => {
+    if (v === null || v === undefined || v === "") return null;
+    if (Array.isArray(v)) {
+      if (!v.length) return null;
+      if (v.every((x) => typeof x !== "object")) return v.join(", ");
+      return `${v.length} ${v.length === 1 ? "item" : "items"}`;
+    }
+    if (typeof v === "object") {
+      const inner = describeArgs(v as Record<string, unknown>);
+      return inner ? `(${inner})` : null;
+    }
+    if (typeof v === "string" && /^[a-z]+(_[a-z]+)+$/.test(v)) return v.replace(/_/g, " ");
+    const s = String(v);
+    return s.length > 80 ? s.slice(0, 80) + "…" : s;
+  };
+  const parts = Object.entries(args ?? {})
+    .map(([k, v]) => {
+      const shown = value(v);
+      return shown === null ? null : `${humanize(k).toLowerCase()}: ${shown}`;
+    })
+    .filter(Boolean);
+  const text = parts.join(", ");
+  return text.length > 300 ? text.slice(0, 300) + "…" : text;
 }
