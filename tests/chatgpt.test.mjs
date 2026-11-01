@@ -124,6 +124,38 @@ test("provider: tools sent in a namespace, tool call returned, result sent back 
   assert.ok(second.input.every((i) => !("id" in i)), "no server-side ids are referenced");
 });
 
+test("follow-up turn: earlier tool results are not resent without their calls", async () => {
+  respondMode = "text";
+  const before = calls.filter((c) => c.url.endsWith("/responses")).length;
+  const kernel = { call: async (method, params) => (method === "chatgpt.respond" ? chatgpt.respond(params.body) : chatgpt.models()) };
+  const p = new ChatGPTPlanProvider(kernel, "gpt-test");
+  const history = [
+    { role: "user", content: "List my files" },
+    { role: "assistant", text: "", toolCalls: [{ id: "call_old", name: "files__recent", args: {} }] },
+    { role: "tool", callId: "call_old", name: "files__recent", content: "a.txt" },
+    { role: "assistant", text: "You have a.txt.", toolCalls: [] },
+    { role: "user", content: "great work" },
+  ];
+  const r = await p.chat({ system: "", messages: history, tools: [] });
+  assert.equal(r.text, "It is 4pm.");
+  const body = JSON.parse(calls.filter((c) => c.url.endsWith("/responses"))[before].body);
+  assert.ok(!body.input.some((i) => i.type === "function_call_output"));
+  assert.deepEqual(body.input.map((i) => i.role), ["user", "assistant", "user"]);
+});
+
+test("conversationOnly keeps what was asked and answered", async () => {
+  const { conversationOnly } = await import("@uab/gateway");
+  const kept = conversationOnly([
+    { role: "user", content: "List my files" },
+    { role: "assistant", text: "", toolCalls: [{ id: "c", name: "x", args: {} }] },
+    { role: "tool", callId: "c", name: "x", content: "a.txt" },
+    { role: "assistant", text: "You have a.txt.", toolCalls: [] },
+  ]);
+  assert.deepEqual(kept.map((m) => m.role), ["user", "assistant"]);
+  const failed = conversationOnly([{ role: "user", content: "hi" }], "ChatGPT: error");
+  assert.deepEqual(failed.map((m) => m.role), ["user", "assistant"]);
+});
+
 test("usage limit: a plain explanation, not a raw error", async () => {
   respondMode = "limit";
   await assert.rejects(chatgpt.respond({ model: "gpt-test", input: [] }), /usage limit/);

@@ -11,6 +11,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { KernelClient } from "@uab/kernel/client";
 import {
   Gateway,
+  conversationOnly,
   appleModelAvailability,
   cloudModelsUrl,
   createProvider,
@@ -80,8 +81,9 @@ async function ask(text: string): Promise<void> {
       signal: running.signal,
       onEvent: (e) => send("gateway", e),
     });
-    // Keep the conversation for follow-ups, but only the readable parts.
-    history = result.messages.slice(-30);
+    // Keep the conversation for follow-ups: what was asked and answered, not each
+    // turn's tool steps. Old tool results without their calls break providers.
+    history = conversationOnly(result.messages, result.text).slice(-20);
   } finally {
     running = null;
   }

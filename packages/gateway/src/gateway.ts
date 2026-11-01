@@ -103,6 +103,22 @@ export class Gateway {
 }
 
 /**
+ * The parts of a finished turn worth remembering for follow-ups: the user's
+ * messages and the final answers. Tool calls and results are left out, since
+ * a result sent without its call is rejected by providers.
+ */
+export function conversationOnly(messages: Message[], finalText?: string): Message[] {
+  const out: Message[] = [];
+  for (const m of messages) {
+    if (m.role === "user") out.push(m);
+    else if (m.role === "assistant" && !m.toolCalls.length && m.text.trim()) out.push({ role: "assistant", text: m.text, toolCalls: [] });
+  }
+  // A turn that ended in an error or stop has no final assistant message; keep what the user saw.
+  if (finalText && out.at(-1)?.role === "user") out.push({ role: "assistant", text: finalText, toolCalls: [] });
+  return out;
+}
+
+/**
  * Small models get relative dates wrong ("tomorrow" becomes today), so give
  * them the next week's dates ready-made instead of asking them to calculate.
  */

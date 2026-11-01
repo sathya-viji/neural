@@ -32,7 +32,11 @@ export class ChatGPTPlanProvider implements ModelProvider {
   }
 
   async chat(req: ChatRequest): Promise<ChatResponse> {
-    if (!this.items.length) this.items = toItems(req.messages);
+    if (!this.items.length) {
+      this.items = toItems(req.messages);
+      // Tool results already in the history belong to earlier turns; only new ones are sent.
+      for (const m of req.messages) if (m.role === "tool") this.sentResults.add(m.callId);
+    }
     for (const m of req.messages) {
       if (m.role !== "tool" || this.sentResults.has(m.callId)) continue;
       this.sentResults.add(m.callId);

@@ -1,4 +1,4 @@
-export { Gateway, dateContext } from "./gateway.js";
+export { Gateway, dateContext, conversationOnly } from "./gateway.js";
 export type { GatewayEvent, KernelCaller, RunOptions } from "./gateway.js";
 export { AnthropicProvider } from "./providers/anthropic.js";
 export { OpenAICompatibleProvider } from "./providers/openai.js";
