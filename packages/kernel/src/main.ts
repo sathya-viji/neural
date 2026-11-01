@@ -5,6 +5,7 @@
  * stdout carries protocol messages only; logs go to stderr.
  */
 import { createInterface } from "node:readline";
+import { watch } from "node:fs";
 import type { KernelEvent, KernelMethods, RpcRequest } from "@uab/protocol";
 import { Kernel, KERNEL_VERSION } from "./kernel.js";
 import { gmail } from "./builtin/gmail.js";
@@ -90,6 +91,14 @@ async function handle(req: RpcRequest): Promise<void> {
 await kernel.start();
 await chatgpt.init(kernel.vault);
 process.stderr.write(`[kernel] ready (home ${kernel.home})\n`);
+
+// Edits to services.json take effect without pressing Reconnect.
+let reloadTimer: NodeJS.Timeout | undefined;
+watch(kernel.home, (_event, file) => {
+  if (file !== "services.json") return;
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(() => void Promise.resolve(handlers["services.reload"]({})).catch(() => {}), 500);
+});
 send({ jsonrpc: "2.0", method: "kernel.ready", params: {} });
 
 const rl = createInterface({ input: process.stdin });
