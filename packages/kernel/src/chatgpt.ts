@@ -206,9 +206,12 @@ export class ChatGPTAccount {
     }
     if (!res.ok || !res.body) throw await apiError(res);
 
-    // Server-sent events; success only once response.completed arrives.
+    // Server-sent events; success only once response.completed arrives. With
+    // store: false the completed event's output can be empty, so each item is
+    // collected from response.output_item.done as it finishes.
     const decoder = new TextDecoder();
     let buffer = "";
+    const streamed: { index: number; item: unknown }[] = [];
     for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
       buffer += decoder.decode(chunk, { stream: true });
       let cut;
@@ -217,13 +220,25 @@ export class ChatGPTAccount {
         buffer = buffer.slice(cut + 2);
         const data = block.split("\n").filter((l) => l.startsWith("data:")).map((l) => l.slice(5).trim()).join("\n");
         if (!data || data === "[DONE]") continue;
-        let event: { type?: string; response?: { output?: unknown[]; error?: { code?: string; message?: string }; incomplete_details?: { reason?: string } }; error?: { code?: string; message?: string } };
+        let event: {
+          type?: string;
+          item?: unknown;
+          output_index?: number;
+          response?: { output?: unknown[]; error?: { code?: string; message?: string }; incomplete_details?: { reason?: string } };
+          error?: { code?: string; message?: string };
+        };
         try {
           event = JSON.parse(data);
         } catch {
           continue;
         }
-        if (event.type === "response.completed") return { output: event.response?.output ?? [] };
+        if (event.type === "response.output_item.done" && event.item) {
+          streamed.push({ index: event.output_index ?? streamed.length, item: event.item });
+        }
+        if (event.type === "response.completed") {
+          const final = event.response?.output ?? [];
+          return { output: final.length ? final : streamed.sort((a, b) => a.index - b.index).map((s) => s.item) };
+        }
         if (event.type === "response.failed" || event.type === "error") {
           const e = event.response?.error ?? event.error ?? {};
           throw new ChatGPTError(friendly(e.code, e.message), e.code);

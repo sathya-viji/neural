@@ -48,9 +48,12 @@ before(async () => {
       if (respondMode === "limit") return sse([{ type: "response.failed", response: { error: { code: "subscription_sharing_usage_limit_exceeded", message: "limit" } } }]);
       const hasResult = body.input.some((i) => i.type === "function_call_output");
       if (respondMode === "tool" && !hasResult) {
+        // As the real service does with store: false: items arrive one by one, the completed event is empty.
         return sse([
           { type: "response.created" },
-          { type: "response.completed", response: { output: [{ id: "rs_1", type: "reasoning", encrypted_content: "enc" }, { id: "fc_1", type: "function_call", call_id: "call_1", name: "uab.system__now", arguments: "{}" }] } },
+          { type: "response.output_item.done", output_index: 0, item: { id: "rs_1", type: "reasoning", encrypted_content: "enc" } },
+          { type: "response.output_item.done", output_index: 1, item: { id: "fc_1", type: "function_call", call_id: "call_1", name: "uab.system__now", arguments: "{}" } },
+          { type: "response.completed", response: { output: [] } },
         ]);
       }
       return sse([
