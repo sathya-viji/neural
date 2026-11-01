@@ -246,11 +246,12 @@ function htmlToText(html: string): string {
     .replace(/<br\s*\/?>|<\/p>|<\/div>|<\/li>/gi, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&#39;|&apos;/g, "'")
     .replace(/&quot;/g, '"')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&amp;/g, "&")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -327,7 +328,8 @@ export const gmailCapabilities: BuiltinCapability[] = [
         from: headerOf(m, "From"),
         subject: headerOf(m, "Subject"),
         date: headerOf(m, "Date"),
-        snippet: m.snippet ?? "",
+        // Gmail returns snippets HTML-escaped (&gt;, &#39;).
+        snippet: htmlToText(m.snippet ?? ""),
         unread: m.labelIds?.includes("UNREAD") ?? false,
       }));
       return {
