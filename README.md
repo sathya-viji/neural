@@ -36,12 +36,18 @@ The same action in the same task runs only once, even if the model proposes it t
 
 ### Built-in services
 
+On a Mac these use the apps already there (Mail, Contacts, Calendar, Reminders). macOS asks once per app before allowing access.
+
 | Service | Capabilities | Default |
 |---|---|---|
 | Files | search, read (shared folders only) | allow |
-| Contacts | find (`~/.uab/contacts.json`) | allow |
-| Mail (local outbox) | send. Saves `.eml` files; does **not** deliver | ask |
+| Contacts | find | allow |
+| Apple Mail | draft (opens for you to review), send | ask |
+| Calendar | list events, add, move | allow / ask |
+| Reminders | list, add | allow / ask |
 | This computer | time, notification, open a file or link | allow / ask |
+
+Elsewhere, or with `UAB_DEMO_SERVICES=1` (used by the tests), Contacts reads `~/.uab/contacts.json` and Mail saves `.eml` files to a local outbox instead of sending.
 
 Add any MCP server in `~/.uab/services.json` (same format as other MCP apps). Use `"vault:NAME"` for secrets so they stay in the Keychain.
 
