@@ -93,6 +93,7 @@ export class AppleOnDeviceProvider implements ModelProvider {
   readonly id = "apple:on-device";
   readonly label = "Built-in (Apple, on this Mac)";
   readonly locality = "local" as const;
+  readonly compact = true;
 
   private child?: ChildProcess;
   private events: HelperEvent[] = [];

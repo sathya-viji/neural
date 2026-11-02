@@ -1,5 +1,7 @@
 // Renderer. Everything that comes from a model or a service is inserted as
 // text, never as HTML.
+import { renderAnswer } from "./answer.js";
+
 const uab = window.uab;
 const $ = (sel) => document.querySelector(sel);
 
@@ -56,12 +58,18 @@ const transcript = $("#transcript");
 const input = $("#input");
 let current = null; // { container, steps: Map<callId, node> }
 
+const scroller = $("#scroller");
 function scrollDown() {
-  transcript.scrollTop = transcript.scrollHeight;
+  scroller.scrollTop = scroller.scrollHeight;
 }
+
+/** An answer as a document: Markdown plus the visual blocks the AI adds. */
+const answer = (text) =>
+  el("div", { class: "answer" }, renderAnswer(text, { openLink: (url) => uab.call("browser.open", url), ask: (prompt) => !current && submit(prompt) }));
 
 function setBusy(busy) {
   $("#send").disabled = busy;
+  $("#send").classList.toggle("hidden", busy);
   $("#stop").classList.toggle("hidden", !busy);
   input.disabled = busy;
   if (!busy) input.focus();
@@ -109,14 +117,39 @@ function loadSuggestions(services) {
     on.has("files") && "What did I save in Downloads this week?",
     ...services.filter((s) => s.kind === "mcp" && s.status === "connected" && s.id !== "mcp.zomato").map((s) => `What can you do with ${s.title}?`),
   ].filter(Boolean);
-  $("#suggestions")?.replaceChildren(...ideas.slice(0, 4).map((text) => el("button", { class: "chip", onclick: () => submit(text) }, text)));
+  $("#suggestions")?.replaceChildren(...ideas.slice(0, 4).map((text) => el("button", { class: "suggestion", onclick: () => submit(text) }, el("span", { class: "suggestion-icon" }, iconFor(text)), el("span", {}, text))));
+  lastServices = services;
+}
+let lastServices = [];
+const iconFor = (text) =>
+  /zomato|biryani|food|restaurant/i.test(text) ? "🍽️" : /calendar/i.test(text) ? "📅" : /email/i.test(text) ? "✉️" : /remind/i.test(text) ? "⏰" : /weather/i.test(text) ? "🌦️" : /download|file/i.test(text) ? "📁" : "✨";
+
+/** The start screen: a greeting by name (from You) and things to try. */
+async function emptyState() {
+  const node = el(
+    "div",
+    { class: "empty", id: "ask-empty" },
+    el("div", { class: "greeting", id: "greeting" }, "Hello"),
+    el("p", { class: "greeting-sub" }, "Say what you'd like done, in your own words. Everyday things happen straight away; anything that sends, changes, orders or deletes asks you first."),
+    el("div", { class: "suggestions", id: "suggestions" }),
+  );
+  transcript.replaceChildren(node);
+  loadSuggestions(lastServices);
+  await setGreeting();
+}
+async function setGreeting() {
+  const h = new Date().getHours();
+  const part = h < 5 ? "Hello" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  const name = (await uab.call("context.get").catch(() => null))?.profile?.name;
+  const g = $("#greeting");
+  if (g) g.textContent = name ? `${part}, ${name.split(" ")[0]}` : part;
 }
 $("#stop").addEventListener("click", () => uab.call("stop"));
 $("#new-conversation").addEventListener("click", async () => {
   if (current) return;
   await uab.call("conversation.new");
   currentConversation = null;
-  transcript.replaceChildren(el("div", { class: "empty", id: "ask-empty" }, el("p", {}, "New conversation. What would you like done?")));
+  emptyState();
   loadConversations();
   showView("ask");
   input.focus();
@@ -144,7 +177,7 @@ async function loadConversations() {
               const { currentId } = await uab.call("conversation.delete", c.id);
               if (!currentId && currentConversation === c.id) {
                 currentConversation = null;
-                transcript.replaceChildren(el("div", { class: "empty", id: "ask-empty" }, el("p", {}, "New conversation. What would you like done?")));
+                emptyState();
               }
               loadConversations();
             },
@@ -178,7 +211,7 @@ function showConversation(c) {
         "div",
         { class: "turn-ai" },
         t.error ? el("div", { class: "error" }, t.error) : null,
-        t.answer && !t.error ? el("div", { class: "answer" }, richText(t.answer)) : null,
+        t.answer && !t.error ? answer(t.answer) : null,
         summaryLine(
           { model: t.model, locality: t.locality, taskId: t.taskId },
           t.steps.map((s) => ({
@@ -224,7 +257,7 @@ function onGateway(e) {
     current.working?.remove();
     const { container, meta, actions, files, error } = current;
     if (error) container.append(el("div", { class: "error" }, error));
-    else container.append(el("div", { class: "answer" }, richText(e.text)));
+    else container.append(answer(e.text));
     for (const file of files) container.append(el("button", { class: "link", onclick: () => uab.call("reveal", file) }, "Show the file in Finder"));
     container.append(summaryLine(meta, [...actions.values()]));
     current = null;
@@ -785,6 +818,7 @@ $("#save-settings").addEventListener("click", async (e) => {
   try {
     const { model, working } = await uab.call("settings.set", settings);
     $("#model-label").textContent = model;
+    $("#model-hint").textContent = model;
     e.target.textContent = "Saved";
     setTimeout(() => (e.target.textContent = "Save"), 1200);
     await loadSettings();
@@ -856,6 +890,8 @@ uab.on((channel, payload) => {
   const hello = await uab.call("hello");
   $("#identity").textContent = `${hello.identity.displayName} · kernel ${hello.version}`;
   $("#model-label").textContent = hello.model;
+  $("#model-hint").textContent = hello.model;
+  setGreeting();
   $("#home-path").textContent = hello.home;
   const services = await uab.call("services");
   rememberServices(services);
