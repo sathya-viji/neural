@@ -123,7 +123,7 @@ async function ask(text: string): Promise<void> {
 
 /** Keep what the user saw of this turn, so the conversation can be reopened after a restart. */
 function record(turn: ConversationTurn, e: GatewayEvent): void {
-  if (e.type === "task") (turn.model = e.model), (turn.locality = e.locality);
+  if (e.type === "task") (turn.model = e.model), (turn.locality = e.locality), (turn.taskId = e.taskId);
   else if (e.type === "proposal") {
     const detail = Object.entries(e.args ?? {})
       .filter(([, v]) => v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length))
@@ -141,7 +141,7 @@ function record(turn: ConversationTurn, e: GatewayEvent): void {
       step.meta = d.approvedBy === "user" ? "You approved" : d.verified ? "Allowed" : "Not verified";
     } else if (d.status === "denied") {
       step.detail = d.reason;
-      step.meta = d.by === "user" ? "You declined" : "Blocked";
+      step.meta = d.by === "user" ? "You declined" : d.by === "policy" ? "Blocked" : "Rejected by the kernel";
     } else {
       step.detail = d.error;
       step.meta = "Failed";

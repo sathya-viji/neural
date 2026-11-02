@@ -73,10 +73,8 @@ function submit(text) {
   $("#ask-empty")?.remove();
   transcript.append(el("div", { class: "turn-user" }, text));
   const container = el("div", { class: "turn-ai" });
-  const steps = el("div", { class: "steps" });
-  container.append(steps);
   transcript.append(container);
-  current = { container, stepsNode: steps, steps: new Map(), question: text };
+  current = { container, actions: new Map(), files: [], question: text };
   input.value = "";
   autosize();
   setBusy(true);
@@ -118,7 +116,7 @@ $("#new-conversation").addEventListener("click", async () => {
   if (current) return;
   await uab.call("conversation.new");
   currentConversation = null;
-  transcript.replaceChildren(el("div", { class: "empty" }, el("p", {}, "New conversation. What would you like done?")));
+  transcript.replaceChildren(el("div", { class: "empty", id: "ask-empty" }, el("p", {}, "New conversation. What would you like done?")));
   loadConversations();
   showView("ask");
   input.focus();
@@ -146,7 +144,7 @@ async function loadConversations() {
               const { currentId } = await uab.call("conversation.delete", c.id);
               if (!currentId && currentConversation === c.id) {
                 currentConversation = null;
-                transcript.replaceChildren(el("div", { class: "empty" }, el("p", {}, "New conversation. What would you like done?")));
+                transcript.replaceChildren(el("div", { class: "empty", id: "ask-empty" }, el("p", {}, "New conversation. What would you like done?")));
               }
               loadConversations();
             },
@@ -179,22 +177,18 @@ function showConversation(c) {
       el(
         "div",
         { class: "turn-ai" },
-        t.model ? el("div", { class: "model-tag" }, t.locality === "cloud" ? el("span", { class: "cloud" }, "☁ ") : "⌂ ", t.model) : null,
-        el(
-          "div",
-          { class: "steps" },
-          ...t.steps.map((s) =>
-            el(
-              "div",
-              { class: `step ${s.status}` },
-              el("div", { class: "icon" }, s.status === "executed" ? "✓" : s.status === "pending" ? "○" : "✕"),
-              el("div", {}, el("div", { class: "title" }, s.title), el("div", { class: "detail" }, s.status === "executed" ? richText(s.detail) : s.detail)),
-              el("div", { class: "meta" }, s.meta || serviceName(s.service)),
-            ),
-          ),
-        ),
         t.error ? el("div", { class: "error" }, t.error) : null,
         t.answer && !t.error ? el("div", { class: "answer" }, richText(t.answer)) : null,
+        summaryLine(
+          { model: t.model, locality: t.locality, taskId: t.taskId },
+          t.steps.map((s) => ({
+            service: s.service,
+            status: s.status,
+            approvedBy: s.meta === "You approved" ? "user" : undefined,
+            // Older saves called kernel rejections "Blocked" too; those say what was invalid.
+            by: s.meta === "You declined" ? "user" : s.meta === "Blocked" && !/^(Invalid|Unknown)/.test(s.detail) ? "policy" : s.status === "denied" ? "kernel" : undefined,
+          })),
+        ),
       ),
     ]),
   );
@@ -210,62 +204,67 @@ function showView(name) {
 function onGateway(e) {
   if (!current) return;
   if (e.type === "task") {
-    current.container.prepend(
-      el("div", { class: "model-tag" }, e.locality === "cloud" ? el("span", { class: "cloud" }, "☁ ") : "⌂ ", `${e.model}${e.locality === "cloud" ? " · cloud" : /this Mac/.test(e.model) ? "" : " · on this computer"}`),
-    );
+    current.meta = { model: e.model, locality: e.locality, taskId: e.taskId };
+    current.working = el("div", { class: "working" }, el("span", { class: "spinner" }), el("span", { class: "working-text" }, "Working on it…"));
+    current.container.append(current.working);
   } else if (e.type === "thinking") {
-    current.stepsNode.append(el("div", { class: "thinking" }, e.text));
+    setWorking("Thinking…");
   } else if (e.type === "proposal") {
-    const node = el(
-      "div",
-      { class: "step pending" },
-      el("div", { class: "icon" }, "○"),
-      el("div", {}, el("div", { class: "title" }, e.capability.title), el("div", { class: "detail" }, briefArgs(e.args))),
-      el("div", { class: "meta" }, serviceName(e.capability.service)),
-    );
-    current.steps.set(e.callId, node);
-    current.stepsNode.append(node);
+    current.actions.set(e.callId, { service: e.capability.service, status: "pending" });
+    setWorking(`${e.capability.title} (${serviceName(e.capability.service)})…`);
   } else if (e.type === "decision") {
-    const node = current.steps.get(e.callId);
-    if (!node) return;
-    const d = e.decision;
-    node.className = `step ${d.status}`;
-    node.querySelector(".icon").textContent = d.status === "executed" ? "✓" : "✕";
-    const detail = node.querySelector(".detail");
-    if (d.status === "executed") {
-      detail.replaceChildren(d.replayed ? "Already done earlier — not repeated." : richText(firstLines(d.result.content, 3)));
-      const file = d.result.data?.file;
-      if (file) detail.after(el("button", { class: "link", onclick: () => uab.call("reveal", file) }, "Show in Finder"));
-      node.querySelector(".meta").textContent = d.approvedBy === "user" ? "You approved" : d.verified ? "Allowed" : "Not verified";
-    } else if (d.status === "denied") {
-      detail.textContent = d.reason;
-      node.querySelector(".meta").textContent = d.by === "user" ? "You declined" : "Blocked";
-    } else {
-      detail.textContent = d.error;
-      node.querySelector(".meta").textContent = "Failed";
-    }
+    const a = current.actions.get(e.callId);
+    if (a) (a.status = e.decision.status), (a.approvedBy = e.decision.approvedBy), (a.by = e.decision.by);
+    // "Show in Finder" is still useful in the chat when a step made a file.
+    const file = e.decision.status === "executed" && e.decision.result.data?.file;
+    if (file) current.files.push(file);
   } else if (e.type === "error") {
-    current.container.append(el("div", { class: "error" }, e.message));
+    current.error = e.message;
   } else if (e.type === "done") {
-    if (!current.container.querySelector(".error")) {
-      const question = current.question;
-      current.container.append(
-        el("div", { class: "answer" }, richText(e.text)),
-        el("div", { class: "answer-actions" }, el("button", { class: "link", onclick: () => uab.call("browser.go", question) }, "Search Google for this")),
-      );
-    }
+    current.working?.remove();
+    const { container, meta, actions, files, error } = current;
+    if (error) container.append(el("div", { class: "error" }, error));
+    else container.append(el("div", { class: "answer" }, richText(e.text)));
+    for (const file of files) container.append(el("button", { class: "link", onclick: () => uab.call("reveal", file) }, "Show the file in Finder"));
+    container.append(summaryLine(meta, [...actions.values()]));
     current = null;
     setBusy(false);
   }
   scrollDown();
 }
 
-function briefArgs(args) {
-  const s = Object.entries(args ?? {})
-    .filter(([, v]) => v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length))
-    .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : typeof v === "object" ? JSON.stringify(v) : v}`)
-    .join(" · ");
-  return s.length > 160 ? s.slice(0, 160) + "…" : s;
+function setWorking(text) {
+  const node = current?.working?.querySelector(".working-text");
+  if (node) node.textContent = text;
+}
+
+/**
+ * One quiet line under an answer: which model, which services it used, and how
+ * many actions. The step-by-step record lives in Activity.
+ */
+function summaryLine(meta, all) {
+  // The kernel turning down a malformed proposal is the AI's own mistake, which it corrects; not worth showing.
+  const actions = all.filter((a) => !(a.status === "denied" && a.by === "kernel"));
+  const services = [...new Set(actions.map((a) => serviceName(a.service)))];
+  const declined = actions.filter((a) => a.status === "denied" && a.by === "user").length;
+  const blocked = actions.filter((a) => a.status === "denied" && a.by === "policy").length;
+  const failed = actions.filter((a) => a.status === "failed").length;
+  const approved = actions.filter((a) => a.approvedBy === "user").length;
+  const parts = [
+    meta?.model ? `${meta.locality === "cloud" ? "☁ " : ""}${meta.model}` : null,
+    services.length ? `Used ${services.slice(0, 3).join(", ")}${services.length > 3 ? ` +${services.length - 3}` : ""}` : null,
+    actions.length ? `${actions.length} ${actions.length === 1 ? "action" : "actions"}` : null,
+    approved ? `${approved} approved by you` : null,
+    declined ? `${declined} declined by you` : null,
+    blocked ? `${blocked} blocked by your permissions` : null,
+    failed ? `${failed} didn't work` : null,
+  ].filter(Boolean);
+  return el(
+    "div",
+    { class: "summary-line" },
+    parts.join(" · "),
+    actions.length && meta?.taskId ? el("button", { class: "link", onclick: () => openActivity(meta.taskId) }, "Details") : null,
+  );
 }
 
 /**
@@ -334,8 +333,9 @@ async function resolveApproval(id, approve) {
 function onApprovalResolved({ approvalId, approved }) {
   const node = approvalNodes.get(approvalId);
   if (!node) return;
-  node.classList.add("resolved");
-  node.querySelector(".who").textContent = approved ? "✓ You allowed this" : "✕ You declined this";
+  // Answered: the card goes away; the summary under the answer and Activity keep the record.
+  approvalNodes.delete(approvalId);
+  node.remove();
 }
 
 /* ---------------- You ---------------- */
@@ -395,6 +395,17 @@ document.querySelectorAll("#preview-mode button").forEach((b) =>
 
 /* ---------------- Activity ---------------- */
 
+/** Show one request's step-by-step record in Activity. */
+async function openActivity(taskId) {
+  showView("activity");
+  await loadActivity();
+  const node = document.getElementById(`task-${taskId}`);
+  if (!node) return;
+  node.scrollIntoView({ block: "start", behavior: "smooth" });
+  node.classList.add("highlight");
+  setTimeout(() => node.classList.remove("highlight"), 2500);
+}
+
 async function loadActivity() {
   const [tasks, entries, verify, caps] = await Promise.all([uab.call("tasks"), uab.call("audit"), uab.call("audit.verify"), uab.call("capabilities")]);
   const titles = new Map(caps.map((c) => [c.id, `${serviceName(c.service)}: ${c.title}`]));
@@ -417,9 +428,9 @@ async function loadActivity() {
     list.append(
       el(
         "div",
-        { class: "task" },
+        { class: "task", id: `task-${t.taskId}` },
         el("div", { class: "task-head" }, el("div", { class: "task-intent" }, t.intent), el("div", { class: "task-time" }, timeAgo(t.startedAt))),
-        t.summary ? el("div", { class: "task-summary" }, t.summary) : null,
+        t.summary ? el("div", { class: "task-summary" }, t.summary.replace(/\*\*/g, "")) : null,
         ...rows.map((e) =>
           el(
             "div",

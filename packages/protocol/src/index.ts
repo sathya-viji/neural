@@ -160,6 +160,8 @@ export interface ConversationTurn {
   at: string;
   model?: string;
   locality?: "local" | "cloud";
+  /** The task in Activity that holds this turn's step-by-step record. */
+  taskId?: string;
   steps: { title: string; service: string; status: "executed" | "denied" | "failed" | "pending"; detail: string; meta: string }[];
 }
 
