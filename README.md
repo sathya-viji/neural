@@ -1,91 +1,119 @@
-# Unified AI Base
+<p align="center"><img src="build/icon.png" width="112" alt="Neural icon" /></p>
 
-**One intelligence. Every device. Any service.**
-An open, model-independent foundation for intention-centric computing: you say what you want done, and it gets done. You don't have to pick the app or the device.
+<h1 align="center">Neural</h1>
 
-> AI proposes. The kernel authorises.
+<p align="center"><b>Say what you want done. Neural does it, and asks before anything important.</b><br />
+An open-source AI desktop app built on <b>Unified AI Base</b>: any AI model, your apps and services, and a trusted kernel that stays in charge.</p>
 
-This repository is **Generation 1**: the core runtime and a desktop workspace.
+<p align="center"><i>AI proposes. The kernel authorises.</i></p>
 
-## What's here
+---
 
-```
-packages/
-  protocol/   Shared contract: capabilities, proposals, decisions, audit records, kernel RPC
-  kernel/     The trusted kernel (runs as its own process)
-              identity · permissions · approvals · execution · verification · audit · vault
-              + service hub: built-in services and any MCP server
-  gateway/    The intelligence layer: local or cloud models turn intentions into proposals
-  cli/        Command-line host (`uab "…"`)
-apps/
-  desktop/    Electron desktop workspace: Ask, Activity, Permissions, Services, Settings
-tests/        End-to-end tests (real kernel process, scripted model)
-```
+> **Public alpha.** Mac only for now (Apple silicon). Expect rough edges, and please [open an issue](../../issues) when you hit one.
 
-### How a request flows
+## What it does
 
-1. **Understand.** The gateway sends your request and the available capabilities to the model you chose.
-2. **Discover.** The kernel lists every capability from built-in services and connected MCP servers.
-3. **Prepare.** The model proposes one action at a time (a capability plus arguments).
-4. **Validate.** The kernel checks the task, the capability, the arguments and your permissions.
-5. **Confirm.** If the policy says *ask*, the kernel shows an approval card built only from its own data.
-6. **Execute.** The kernel runs the action through the service hub. The model never touches a service.
-7. **Verify.** The kernel checks the result and records it in a hash-chained activity history.
+Ask in your own words. Neural works out the steps and uses the services you've connected:
 
-The same action in the same task runs only once, even if the model proposes it twice.
+- *"What's on my calendar tomorrow?"* · *"Remind me to call the bank at 10"*
+- *"Find the Q3 report in Documents and email it to Sam"*
+- *"Any important emails today?"* (Gmail or Apple Mail)
+- *"Find good biryani places near me on Zomato"*
+- *"What's the weather this weekend?"* · *"Summarise this page"* (built-in browser)
 
-### Built-in services
+Answers come back as readable documents: tables, option cards, forecasts, timelines and follow-up buttons, not a wall of chat.
 
-On a Mac these use the apps already there (Mail, Contacts, Calendar, Reminders). macOS asks once per app before allowing access.
+## Why it's different
 
-| Service | Capabilities | Default |
+| | Typical AI assistant | Neural |
 |---|---|---|
-| Files | search, read (shared folders only) | allow |
-| Contacts | find | allow |
-| Apple Mail | draft (opens for you to review), send | ask |
-| Calendar | list events, add, move | allow / ask |
-| Reminders | list, add | allow / ask |
-| This computer | time, notification, open a file or link | allow / ask |
-| Gmail (direct API) | search, read, draft, send. See [docs/gmail-setup.md](docs/gmail-setup.md) | allow / ask |
-| Web & weather | web search (ChatGPT web search on your plan, a Brave Search key in the vault as `web.brave`, or Wikipedia), read a page, weather (Open-Meteo). No key needed | allow |
+| Who decides what runs | The model | A **trusted kernel**, separate from every model |
+| Consequential actions | Often just run | Sending, changing, ordering and deleting **wait for your OK** |
+| Model | Fixed | **Your choice**: Apple's on-device model, your ChatGPT plan, Gemini, Claude or a local model |
+| Your keys and sign-ins | Often handed to the model or app | Kept in the macOS Keychain by the kernel; **the AI never sees them** |
+| What the AI knows about you | Hidden | A **You** screen shows exactly what's sent, and cloud models get less |
+| History | Hard to check | Every action in a **tamper-evident activity log** |
+| Integrations | Built into one product | Any **MCP** service, local or online |
 
-Elsewhere, or with `UAB_DEMO_SERVICES=1` (used by the tests), Contacts reads `~/.uab/contacts.json` and Mail saves `.eml` files to a local outbox instead of sending.
+## Get it
 
-Add any MCP server in `~/.uab/services.json` (same format as other MCP apps). Use `"vault:NAME"` for secrets so they stay in the Keychain.
+1. Download **Neural-x.y.z-arm64.dmg** from [Releases](../../releases).
+2. Open it and drag **Neural** to Applications.
+3. The alpha isn't signed with an Apple Developer ID yet, so the first time, **right-click Neural → Open → Open**. (Or: System Settings → Privacy & Security → *Open Anyway*.)
+4. A short welcome lets you pick the AI, tell it your name and city (optional), and share some folders.
 
-## Run it
+### Choosing the AI
 
-Requirements: Node 22+ and macOS (Linux and Windows mostly work; the vault falls back to a file there).
+| Option | Cost | Notes |
+|---|---|---|
+| **Built-in** | Free | Apple Intelligence on this Mac; private and offline. Best for everyday tasks. |
+| **ChatGPT** | Your Plus/Pro plan | Sign in with ChatGPT; no API key. The kernel holds the sign-in. |
+| **Gemini** | Free tier | Paste a free key from aistudio.google.com. |
+| **Claude, OpenAI-compatible** | API billing | Paste a key; it never leaves the kernel. |
+| **Local server** | Free | Ollama, LM Studio or llama.cpp on your machine. |
 
-```bash
-npm install
-npm start          # build + open the desktop app
-npm test           # end-to-end tests
-npm run cli -- "find the q3 report and email it to sam"
+### Connecting services
+
+Built in: Files (only folders you share), Apple Mail, Contacts, Calendar, Reminders, web search and weather, a built-in browser, and this Mac (notifications, opening files).
+
+- **Gmail**: one-time setup, see [docs/gmail-setup.md](docs/gmail-setup.md).
+- **Any MCP service**: Services → *Add a service*, then paste its address. Services that need an account show a **Sign in** button (standard MCP sign-in). For example Zomato's is `https://mcp-server.zomato.com/mcp` (Zomato currently allows personal and testing use).
+
+## How it works
+
+```
+ You ── Neural app ── Model gateway ── any model (on-device or cloud)
+                           │  proposals only
+                           ▼
+                  ┌──────────────────┐
+                  │  Trusted kernel  │  permissions · approvals · vault · context
+                  │  (own process)   │  verification · tamper-evident audit
+                  └────────┬─────────┘
+                           ▼
+          Built-in services · MCP services · your Mac's apps
 ```
 
-### Pick a model
-
-- **Built-in (default):** on Macs with Apple Intelligence, the app uses Apple's on-device model. No key, no account, nothing leaves the Mac.
-- **Sign in with ChatGPT:** Settings → Cloud → ChatGPT → *Sign in with ChatGPT*. Uses your ChatGPT Plus or Pro plan; no API key. The kernel keeps the sign-in and makes the requests itself, so the token never leaves it. (OpenAI's flow for open-source, locally hosted apps.)
-- **Local server:** install [Ollama](https://ollama.com), then run `ollama pull qwen3:8b`. Any OpenAI-compatible local server also works (LM Studio, llama.cpp).
-- **API key:** Settings → Cloud → Gemini, Anthropic or OpenAI-compatible, then paste your key (it's stored in the Keychain).
+Every request follows the same lifecycle: **understand → discover → propose → validate → confirm → execute → verify**. The model can only *propose* actions; the kernel checks them against your permissions, asks you when needed, runs them, checks the result and records it. More in [docs/how-it-works.md](docs/how-it-works.md).
 
 ## Your data
 
-Everything lives in `~/.uab` (or `$UAB_HOME`): `policy.json`, `audit.jsonl`, `tasks.jsonl`, `services.json`, `settings.json`, `contacts.json` and `outbox/`. There is no telemetry.
+Everything stays on your Mac, in `~/.uab`: settings, permissions, your profile and memories, conversations and the activity log. Keys and sign-ins live in the macOS Keychain. There's no telemetry. Cloud models receive only what each request needs, and the **You** screen shows you exactly what that is.
+
+## Build from source
+
+Requirements: macOS on Apple silicon, Node 22+, Xcode command line tools (for the on-device model helper).
+
+```bash
+npm install
+npm start            # build and open the app
+npm test             # end-to-end tests (real kernel process, scripted models)
+npm run package      # build release/dist/Neural-<version>-arm64.dmg
+```
+
+```
+packages/
+  protocol/   The shared contract: capabilities, proposals, decisions, audit records, kernel RPC
+  kernel/     The trusted kernel: policy, approvals, vault, context and memory, MCP host, audit
+  gateway/    The intelligence layer: model providers turn requests into proposals
+  cli/        A command-line host: uab "…"
+apps/
+  desktop/    Neural, the Electron app
+tests/        End-to-end tests
+```
 
 ## Roadmap
 
-- [x] Kernel: proposals, policy, approvals, idempotency, verification, audit, vault
-- [x] Model gateway: Ollama / OpenAI-compatible / Claude
-- [x] MCP host and built-in services
-- [x] Desktop workspace
-- [ ] Real mail and calendar services, provider SDK and a connector guide
-- [ ] Conformance tests for services
+- [x] Trusted kernel: policy, approvals, no repeated actions, verification, tamper-evident audit, vault
+- [x] Any model: Apple on-device, ChatGPT plan, Gemini, Claude, local servers
+- [x] MCP host: local and online services with sign-in
+- [x] Context and memory you control, with on-device relevance picking for cloud models
+- [x] Desktop app with document-style answers and visual blocks
+- [ ] Provider SDK and conformance tests, so anyone can build a connector
+- [ ] The kernel as an MCP server, so other AI apps can act through it
 - [ ] Voice input
-- [ ] Android runtime and cross-device handoff (Generation 2)
+- [ ] Linux and Windows
+- [ ] Android and cross-device continuity (Generation 2)
 
 ## License
 
-Apache-2.0
+[Apache-2.0](LICENSE). The bundled embedding model ([all-MiniLM-L6-v2](https://huggingface.co/Xenova/all-MiniLM-L6-v2)) is also Apache-2.0.

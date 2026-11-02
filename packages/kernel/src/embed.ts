@@ -26,7 +26,8 @@ export class Embedder {
     this.ready ??= (async () => {
       const require = createRequire(import.meta.url);
       ort.env.wasm.numThreads = 1;
-      ort.env.wasm.wasmPaths = dirname(require.resolve("onnxruntime-web")) + "/";
+      // The WebAssembly runtime: from node_modules in development, or where the packaged app put it.
+      ort.env.wasm.wasmPaths = process.env.UAB_ORT_WASM || dirname(require.resolve("onnxruntime-web")) + "/";
       ort.env.logLevel = "error";
       const tokenizer = new Tokenizer(
         JSON.parse(readFileSync(join(MODEL_DIR, "tokenizer.json"), "utf8")),

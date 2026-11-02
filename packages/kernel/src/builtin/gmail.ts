@@ -198,7 +198,7 @@ async function tokenRequest(form: Record<string, string>): Promise<{ access_toke
 
 export function page(ok: boolean, message: string): string {
   const safe = message.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
-  return `<!doctype html><meta charset="utf-8"><title>Unified AI Base</title>
+  return `<!doctype html><meta charset="utf-8"><title>Neural</title>
 <body style="font:16px -apple-system,system-ui,sans-serif;display:grid;place-items:center;height:90vh;background:#14161a;color:#e8e9ec">
 <div style="max-width:440px;text-align:center"><div style="font-size:40px">${ok ? "✓" : "✕"}</div><p>${safe}</p></div></body>`;
 }

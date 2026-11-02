@@ -16,10 +16,13 @@
     "clean": "rm -rf packages/*/dist apps/*/dist packages/*/tsconfig.tsbuildinfo apps/*/tsconfig.tsbuildinfo",
     "start": "npm run build && npm --workspace @uab/desktop run start",
     "cli": "npm run build && node packages/cli/dist/main.js",
-    "test": "npm run build && node --test \"tests/*.test.mjs\""
+    "test": "npm run build && node --test \"tests/*.test.mjs\"",
+    "package": "npm run build && node scripts/package.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "electron-builder": "26.17.0",
+    "esbuild": "0.28.2",
     "typescript": "^5.9.3"
   },
   "license": "Apache-2.0"

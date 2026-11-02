@@ -7,6 +7,8 @@ import type { KernelEvents, KernelMethods, RpcNotification, RpcResponse } from "
 export interface KernelClientOptions {
   /** Node binary to run the kernel with. Defaults to the current one. */
   execPath?: string;
+  /** The kernel's entry script. Defaults to main.js next to this file (a packaged app bundles it elsewhere). */
+  entry?: string;
   env?: NodeJS.ProcessEnv;
   onLog?: (line: string) => void;
 }
@@ -22,7 +24,7 @@ export class KernelClient extends EventEmitter {
   }
 
   async start(): Promise<void> {
-    const entry = fileURLToPath(new URL("./main.js", import.meta.url));
+    const entry = this.options.entry ?? fileURLToPath(new URL("./main.js", import.meta.url));
     const child = spawn(this.options.execPath ?? process.execPath, [entry], {
       env: { ...process.env, ...this.options.env },
       stdio: ["pipe", "pipe", "pipe"],

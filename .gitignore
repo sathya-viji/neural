@@ -5,3 +5,5 @@ dist/
 .uab-test*/
 packages/gateway/native/bin/
 packages/kernel/models/all-MiniLM-L6-v2/
+release/
+build/icon-src.png

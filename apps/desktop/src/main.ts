@@ -31,6 +31,8 @@ import { MiniBrowser, refersToPage } from "./browser.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = join(here, "..");
+// In the packaged app the on-device model helper sits in the app folder.
+if (app.isPackaged) process.env.UAB_APPLE_HELPER = join(appRoot, "bin", "uab-apple-model");
 
 let win: BrowserWindow | null = null;
 let kernel: KernelClient;
@@ -224,7 +226,7 @@ function registerIpc(): void {
   handle("policy.get", () => kernel.call("policy.get", {}));
   handle("policy.set", (target: string, permission: Permission) => kernel.call("policy.set", { target, permission }));
   handle("roots.add", async () => {
-    const pick = await dialog.showOpenDialog(win!, { properties: ["openDirectory", "multiSelections"], title: "Share folders with Unified AI Base" });
+    const pick = await dialog.showOpenDialog(win!, { properties: ["openDirectory", "multiSelections"], title: "Share folders with Neural" });
     if (pick.canceled) return {};
     const policy = await kernel.call("policy.get", {});
     return kernel.call("policy.setFileRoots", { roots: [...new Set([...policy.fileRoots, ...pick.filePaths])] });
@@ -294,7 +296,7 @@ function registerIpc(): void {
   });
   handle("chatgpt.disconnect", () => kernel.call("chatgpt.disconnect", {}));
   handle("chatgpt.models", () => kernel.call("chatgpt.models", {}));
-  handle("gmail.guide",() => shell.openPath(join(appRoot, "..", "..", "docs", "gmail-setup.md")));
+  handle("gmail.guide", () => shell.openPath(app.isPackaged ? join(appRoot, "docs", "gmail-setup.md") : join(appRoot, "..", "..", "docs", "gmail-setup.md")));
 
   handle("settings.get", () => loadSettings());
   handle("settings.set", async (s: ModelSettings) => {
@@ -347,7 +349,12 @@ function registerIpc(): void {
 async function startKernel(): Promise<void> {
   kernel = new KernelClient({
     execPath: process.execPath,
-    env: { ELECTRON_RUN_AS_NODE: "1" },
+    // Packaged: the kernel is bundled next to this file, with its model and runtime in the app folder.
+    entry: app.isPackaged ? join(here, "kernel.js") : undefined,
+    env: {
+      ELECTRON_RUN_AS_NODE: "1",
+      ...(app.isPackaged ? { UAB_EMBED_MODEL: join(appRoot, "models", "all-MiniLM-L6-v2"), UAB_ORT_WASM: join(appRoot, "ort") + "/" } : {}),
+    },
     onLog: (line) => console.log(line),
   });
   const events: KernelEvent[] = ["approval.requested", "approval.resolved", "audit.appended", "services.changed", "chatgpt.changed"];
@@ -373,7 +380,7 @@ function createWindow(): void {
     height: 800,
     minWidth: 760,
     minHeight: 560,
-    title: "Unified AI Base",
+    title: "Neural",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#14161a" : "#f6f6f3",
     webPreferences: {

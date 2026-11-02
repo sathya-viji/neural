@@ -9,9 +9,11 @@ import { ProviderError } from "./types.js";
 const run = promisify(execFile);
 
 export const APPLE_HELPER = fileURLToPath(new URL("../../native/bin/uab-apple-model", import.meta.url));
+/** Where the helper is: next to the code in development, or wherever the packaged app put it (UAB_APPLE_HELPER). */
+export const appleHelperPath = () => process.env.UAB_APPLE_HELPER || APPLE_HELPER;
 
 /** Is Apple's on-device model usable on this machine right now? */
-export async function appleModelAvailability(helper = APPLE_HELPER): Promise<{ available: boolean; reason?: string }> {
+export async function appleModelAvailability(helper = appleHelperPath()): Promise<{ available: boolean; reason?: string }> {
   if (process.platform !== "darwin") return { available: false, reason: "The built-in model needs a Mac with Apple Intelligence." };
   if (!existsSync(helper)) return { available: false, reason: "The built-in model helper isn't built. Run npm run build." };
   try {
@@ -100,7 +102,7 @@ export class AppleOnDeviceProvider implements ModelProvider {
   private waiter?: (e: HelperEvent) => void;
   private answered = new Set<string>();
 
-  constructor(private helper = APPLE_HELPER) {}
+  constructor(private helper = appleHelperPath()) {}
 
   async chat(req: ChatRequest): Promise<ChatResponse> {
     if (!this.child) this.start(req);

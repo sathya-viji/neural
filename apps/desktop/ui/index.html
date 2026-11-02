@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'" />
-  <title>Unified AI Base</title>
+  <title>Neural</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="app">
     <nav class="sidebar">
       <div class="brand">
-        <div class="mark" aria-hidden="true"></div>
+        <img class="mark" src="icon.png" alt="" />
         <div>
-          <div class="brand-name">Unified AI Base</div>
+          <div class="brand-name">Neural</div>
           <div class="brand-sub" id="identity">Starting…</div>
         </div>
       </div>
@@ -230,6 +230,47 @@
       </div>
       <div class="browser-host" id="browser-host"></div>
     </aside>
+  </div>
+  <!-- First launch: a short welcome. Every step can be skipped and changed later. -->
+  <div class="welcome hidden" id="welcome">
+    <div class="welcome-card">
+      <div class="welcome-step" data-step="0">
+        <img class="welcome-icon" src="icon.png" alt="" />
+        <h1>Welcome to Neural</h1>
+        <p>Tell it what you want done, in your own words. It finds files, checks your calendar, writes email, orders food and more, using the apps and services you connect.</p>
+        <p class="hint"><b>You stay in charge.</b> A trusted kernel checks every step: everyday things happen straight away, and anything that sends, changes, orders or deletes waits for your OK. Your data stays on this Mac.</p>
+        <div class="welcome-actions"><button class="ghost" data-skip>Skip setup</button><button class="primary" data-next>Get started</button></div>
+      </div>
+      <div class="welcome-step hidden" data-step="1">
+        <h2>Choose the AI</h2>
+        <p>You can change this any time in Settings.</p>
+        <div class="welcome-choices">
+          <button class="welcome-choice" data-model="builtin"><b>Built-in</b><span>Apple Intelligence on this Mac. Free and private; best for everyday tasks.</span><span class="hint" id="welcome-builtin"></span></button>
+          <button class="welcome-choice" data-model="chatgpt"><b>ChatGPT</b><span>Use your ChatGPT Plus or Pro plan. Smarter for complex tasks. No API key.</span></button>
+          <button class="welcome-choice" data-model="later"><b>Decide later</b><span>Other options (Gemini, Claude, a local server) are in Settings.</span></button>
+        </div>
+      </div>
+      <div class="welcome-step hidden" data-step="2">
+        <h2>About you</h2>
+        <p>Optional. It helps with things like "near me" or "my usual". Kept on this Mac; edit it any time under You.</p>
+        <div class="grid2">
+          <label>Name <input id="w-name" placeholder="What should Neural call you?" autocomplete="off" /></label>
+          <label>City <input id="w-city" placeholder="e.g. Chennai" autocomplete="off" /></label>
+        </div>
+        <div class="welcome-actions"><button class="ghost" data-next>Skip</button><button class="primary" id="w-save">Continue</button></div>
+      </div>
+      <div class="welcome-step hidden" data-step="3">
+        <h2>Share some folders</h2>
+        <p>Neural can only see the folders you share, like Documents or Downloads. You can add or remove them under Permissions.</p>
+        <div class="welcome-actions"><button class="ghost" data-next>Not now</button><button class="primary" id="w-folders">Choose folders…</button></div>
+      </div>
+      <div class="welcome-step hidden" data-step="4">
+        <h2>You're all set</h2>
+        <p>Connect more under <b>Services</b> (Gmail, Zomato and any MCP service). Every action is recorded under <b>Activity</b>.</p>
+        <div class="welcome-actions"><button class="primary" data-done>Start using Neural</button></div>
+      </div>
+      <div class="welcome-dots"><span></span><span></span><span></span><span></span><span></span></div>
+    </div>
   </div>
   <script src="app.js" type="module"></script>
 </body>

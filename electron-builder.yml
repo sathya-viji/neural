@@ -1,0 +1,27 @@
+# Builds Neural.dmg from the staged app in release/app (see scripts/package.mjs).
+appId: ai.unifiedaibase.neural
+productName: Neural
+copyright: Unified AI Base contributors
+directories:
+  app: release/app
+  output: release/dist
+  buildResources: build
+asar: false
+npmRebuild: false
+electronVersion: 45.2.1
+electronDist: node_modules/electron/dist
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+  icon: build/icon.png
+  category: public.app-category.productivity
+  # Not signed yet: macOS will ask the user to confirm the first launch.
+  identity: null
+  extendInfo:
+    NSAppleEventsUsageDescription: Neural uses Mail, Calendar, Reminders and Contacts when you ask it to, after the kernel's checks.
+    NSContactsUsageDescription: Neural looks up contacts when you ask it to.
+    NSCalendarsUsageDescription: Neural reads and changes calendar events when you ask it to.
+    NSRemindersUsageDescription: Neural reads and changes reminders when you ask it to.
+dmg:
+  title: Neural ${version}

@@ -20,7 +20,7 @@ const JWKS_URL = `${ISSUER}/.well-known/jwks.json`;
 const RESOURCE = "https://api.openai.com/v1";
 const SCOPES = "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct";
 const PLAN_SCOPE = "chatgpt.tokens.use.direct";
-const APP_NAME = "Unified AI Base";
+const APP_NAME = "Neural";
 const V_ACCOUNT = "chatgpt.account";
 const V_HOST = "chatgpt.host";
 
@@ -382,7 +382,7 @@ function friendly(code?: string, message?: string): string {
 
 function page(ok: boolean, message: string): string {
   const safe = message.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
-  return `<!doctype html><meta charset="utf-8"><title>Unified AI Base</title>
+  return `<!doctype html><meta charset="utf-8"><title>Neural</title>
 <body style="font:16px -apple-system,system-ui,sans-serif;display:grid;place-items:center;height:90vh;background:#14161a;color:#e8e9ec">
 <div style="max-width:440px;text-align:center"><div style="font-size:40px">${ok ? "✓" : "✕"}</div><p>${safe}</p></div></body>`;
 }

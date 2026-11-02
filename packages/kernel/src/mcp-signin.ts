@@ -55,7 +55,7 @@ export class McpSignIn implements OAuthClientProvider {
 
   get clientMetadata(): OAuthClientMetadata {
     return {
-      client_name: "Unified AI Base",
+      client_name: "Neural",
       redirect_uris: this.redirect ? [this.redirect] : [],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],

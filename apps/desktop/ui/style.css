@@ -80,10 +80,7 @@ button.icon:disabled { opacity: 0.35; cursor: default; }
 }
 .sidebar button { -webkit-app-region: no-drag; }
 .brand { display: flex; gap: 10px; align-items: center; padding: 0 8px 18px; }
-.mark {
-  width: 28px; height: 28px; border-radius: 8px;
-  background: conic-gradient(from 200deg, #2f5bd3, #31a6a0, #8a5cf6, #2f5bd3);
-}
+.mark { width: 32px; height: 32px; margin: -2px; }
 .brand-name { font-weight: 600; }
 .brand-sub { color: var(--muted); font-size: 12px; }
 .nav {
@@ -381,3 +378,21 @@ button.small { padding: 4px 10px; font-size: 12.5px; }
 .with-browser .composer { width: calc(100% - 28px); }
 .composer textarea:focus { outline: none; }
 .composer:focus-within { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+
+/* First-launch welcome */
+.welcome { position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(10px); display: grid; place-items: center; z-index: 10; -webkit-app-region: drag; }
+.welcome-card { -webkit-app-region: no-drag; width: min(560px, calc(100vw - 48px)); background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 32px 34px 22px; box-shadow: 0 20px 60px rgb(0 0 0 / 18%); display: grid; gap: 16px; }
+.welcome-step { display: grid; gap: 12px; }
+.welcome-step h1 { font-size: 26px; font-family: ui-serif, "New York", Georgia, serif; }
+.welcome-step h2 { font-size: 20px; text-transform: none; letter-spacing: -0.01em; color: var(--text); margin: 0; }
+.welcome-step p { margin: 0; color: var(--muted); line-height: 1.55; }
+.welcome-icon { width: 64px; height: 64px; }
+.welcome-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.welcome-choices { display: grid; gap: 8px; }
+.welcome-choice { display: grid; gap: 2px; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text); cursor: pointer; }
+.welcome-choice span { color: var(--muted); font-size: 13px; }
+.welcome-choice:hover:not(:disabled) { border-color: var(--accent); }
+.welcome-choice:disabled { opacity: 0.5; cursor: default; }
+.welcome-dots { display: flex; justify-content: center; gap: 6px; }
+.welcome-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.welcome-dots span.on { background: var(--accent); }

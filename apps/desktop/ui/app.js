@@ -884,6 +884,70 @@ uab.on((channel, payload) => {
   else if (channel === "conversations.changed") (currentConversation = payload.currentId), loadConversations();
 });
 
+/* ---------------- First-launch welcome ---------------- */
+
+const welcome = $("#welcome");
+function welcomeStep(n) {
+  welcome.querySelectorAll(".welcome-step").forEach((s) => s.classList.toggle("hidden", Number(s.dataset.step) !== n));
+  welcome.querySelectorAll(".welcome-dots span").forEach((d, i) => d.classList.toggle("on", i === n));
+  welcome.dataset.step = String(n);
+}
+function finishWelcome() {
+  try {
+    localStorage.setItem("neural.welcomed", "1");
+  } catch {}
+  welcome.classList.add("hidden");
+  setGreeting();
+  input.focus();
+}
+async function maybeWelcome() {
+  let seen = false;
+  try {
+    seen = localStorage.getItem("neural.welcomed") === "1";
+  } catch {}
+  if (seen) return;
+  welcomeStep(0);
+  welcome.classList.remove("hidden");
+  const r = await uab.call("builtin.status").catch(() => ({ available: false }));
+  $("#welcome-builtin").textContent = r.available ? "Ready on this Mac." : r.reason || "Not available on this Mac.";
+  welcome.querySelector('[data-model="builtin"]').disabled = !r.available;
+}
+welcome.addEventListener("click", (e) => {
+  const t = e.target.closest("button");
+  if (!t) return;
+  if (t.hasAttribute("data-next")) welcomeStep(Number(welcome.dataset.step) + 1);
+  else if (t.hasAttribute("data-skip") || t.hasAttribute("data-done")) finishWelcome();
+});
+welcome.querySelectorAll("[data-model]").forEach((b) =>
+  b.addEventListener("click", async () => {
+    const choice = b.dataset.model;
+    if (choice !== "later") {
+      const s = await uab.call("settings.get");
+      s.active = choice === "builtin" ? "builtin" : "cloud";
+      if (choice === "chatgpt") s.cloud = { ...s.cloud, kind: "chatgpt", model: "" };
+      const { model } = await uab.call("settings.set", s);
+      $("#model-label").textContent = model;
+      $("#model-hint").textContent = model;
+      // ChatGPT: sign in on OpenAI's page in the browser; the kernel keeps the sign-in.
+      if (choice === "chatgpt") uab.call("chatgpt.connect").catch(() => {});
+    }
+    welcomeStep(2);
+  }),
+);
+$("#w-save").addEventListener("click", async () => {
+  const name = $("#w-name").value.trim();
+  const city = $("#w-city").value.trim();
+  if (name || city) {
+    const { profile } = await uab.call("context.get");
+    await uab.call("context.setProfile", { ...profile, ...(name && { name }), ...(city && { city }) });
+  }
+  welcomeStep(3);
+});
+$("#w-folders").addEventListener("click", async () => {
+  await uab.call("roots.add").catch(() => {});
+  welcomeStep(4);
+});
+
 /* ---------------- start ---------------- */
 
 (async () => {
@@ -901,4 +965,5 @@ uab.on((channel, payload) => {
   else loadConversations();
   for (const req of await uab.call("approvals.pending")) showApproval(req);
   input.focus();
+  maybeWelcome();
 })();
