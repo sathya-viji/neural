@@ -172,3 +172,43 @@ test("approving in the app's own chat: the kernel's card is shown there, and onl
   await kernel.call("agents.confirmInApp", { on: false });
   await kernel.call("agents.enable", { on: false });
 });
+
+test("approval card inside the chat (MCP Apps): shown by the app, answered only with the card's one-time code", async () => {
+  await kernel.call("agents.enable", { on: true });
+  await kernel.call("agents.confirmInApp", { on: true });
+  const { token } = await kernel.call("agents.token", {});
+  const app = new Client({ name: "claude-like", version: "1" }, { capabilities: { extensions: { "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] } } } });
+  await app.connect(bridgeFor(token, "Card App"));
+
+  const { tools } = await app.listTools();
+  assert.equal(tools.find((t) => t.name === "mcp__notes__add_note")._meta.ui.resourceUri, "ui://neural/approval");
+  assert.equal(tools.find((t) => t.name === "mcp__notes__list_notes")._meta, undefined); // reading needs no card
+  assert.deepEqual(tools.find((t) => t.name === "neural_answer")._meta.ui.visibility, ["app"]);
+  const html = await app.readResource({ uri: "ui://neural/approval" });
+  assert.equal(html.contents[0].mimeType, "text/html;profile=mcp-app");
+  assert.match(html.contents[0].text, /ui\/initialize/);
+
+  hold = true;
+  const res = await app.callTool({ name: "mcp__notes__add_note", arguments: { title: "Card", text: "allowed on the card" } });
+  hold = false;
+  const n = res.structuredContent.neural;
+  assert.equal(n.state, "waiting");
+  assert.match(n.card.summary, /Notes: Add a note "Card"/);
+  assert.ok(!res.content[0].text.includes(n.card.code)); // the AI's text never contains the code
+
+  const wrong = await app.callTool({ name: "neural_answer", arguments: { approval_id: n.card.approvalId, code: "guess", approve: true } });
+  assert.equal(wrong.isError, true);
+  const ok = await app.callTool({ name: "neural_answer", arguments: { approval_id: n.card.approvalId, code: n.card.code, approve: true } });
+  assert.equal(ok.content[0].text, "Allowed.");
+  await new Promise((r) => setTimeout(r, 200));
+  const status = await app.callTool({ name: "neural_request_status", arguments: { request_id: n.requestId } });
+  assert.equal(status.structuredContent.neural.state, "done");
+  assert.match(status.structuredContent.neural.text, /Saved "Card"/);
+
+  // A slow action that needs no approval isn't reported as waiting.
+  const read = await app.callTool({ name: "mcp__notes__list_notes", arguments: {} });
+  assert.equal(read.structuredContent.neural.state, "done");
+  await app.close();
+  await kernel.call("agents.confirmInApp", { on: false });
+  await kernel.call("agents.enable", { on: false });
+});

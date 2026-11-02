@@ -22,6 +22,8 @@ export class AgentAccess {
   private clients = new Set<string>();
   /** Requests still waiting for the user's OK after the app stopped waiting, by request id. */
   private waiting = new Map<string, { client: string; decision?: Decision; createdAt: number }>();
+  /** One-time codes for approval cards shown inside an app's chat; the AI never gets them. */
+  private cardCodes = new Map<string, string>();
   onChange: () => void = () => {};
 
   constructor(private kernel: Kernel) {
@@ -94,13 +96,15 @@ export class AgentAccess {
     let client: string | null = null;
     let taskId: string | null = null;
     let actions = 0;
-    let canConfirm = false; // the app said it can show a confirmation in its own chat
+    let canConfirm = false; // the app can show a confirmation prompt (MCP elicitation)
+    let canShowCard = false; // the app can show an interactive card in its chat (MCP Apps)
     // Offer this connection's approvals to the app, to show in its chat (see confirmInApp).
     const inAppAllowed = (r: ApprovalRequest) => canConfirm && this.confirmInApp && r.taskId === taskId && !r.capability.effects.includes("spend");
+    const cardAllowed = (r: ApprovalRequest) => canShowCard && this.confirmInApp && r.taskId === taskId && !r.capability.effects.includes("spend");
+    const serviceTitle = (r: ApprovalRequest) => this.kernel.hub.services().find((x) => x.id === r.capability.service)?.title.replace(/ \(.*\)$/, "") ?? r.capability.service;
     const onApproval = (r: ApprovalRequest) => {
       if (!inAppAllowed(r)) return;
-      const service = this.kernel.hub.services().find((x) => x.id === r.capability.service)?.title.replace(/ \(.*\)$/, "") ?? r.capability.service;
-      send({ event: "approval", approval: { approvalId: r.approvalId, summary: r.summary, service, risk: r.capability.risk, effects: r.capability.effects } });
+      send({ event: "approval", approval: { approvalId: r.approvalId, summary: r.summary, service: serviceTitle(r), risk: r.capability.risk, effects: r.capability.effects } });
     };
     this.kernel.on("approval.requested", onApproval);
     const lines = createInterface({ input: socket });
@@ -133,6 +137,7 @@ export class AgentAccess {
           }
           client = String(req.params?.client || "Another AI app").slice(0, 60);
           canConfirm = req.params?.canConfirm === true;
+          canShowCard = req.params?.canShowCard === true;
           hello = true;
           this.clients.add(client);
           this.onChange();
@@ -144,6 +149,10 @@ export class AgentAccess {
         } else if (req.method === "call") {
           taskId ??= this.kernel.startTask(`Requests from ${client}`);
           actions++;
+          // Note the approval this call raises, so a card for it can go back to the app.
+          let raised: ApprovalRequest | undefined;
+          const noteApproval = (r: ApprovalRequest) => void (r.taskId === taskId && !raised && (raised = r));
+          this.kernel.on("approval.requested", noteApproval);
           const decided = this.kernel.propose({
             taskId,
             capability: String(req.params?.capability),
@@ -155,18 +164,32 @@ export class AgentAccess {
           // After waitMs, hand back a request id; the action still happens only if the user allows it.
           const waitMs = Math.min(Math.max(Number(req.params?.waitMs) || 40_000, 1_000), 120_000);
           const first = await Promise.race([decided, new Promise<null>((r) => setTimeout(() => r(null), waitMs))]);
+          this.kernel.off("approval.requested", noteApproval);
           if (first) return reply(first);
+          // Still running but not waiting for the user (a slow search, say): just finish it.
+          if (!raised || !this.kernel.pendingApprovals().some((a) => a.approvalId === raised!.approvalId)) return reply(await decided);
           const requestId = randomBytes(6).toString("base64url");
           const entry: { client: string; decision?: Decision; createdAt: number } = { client: client!, createdAt: Date.now() };
           this.waiting.set(requestId, entry);
           void decided.then((d) => (entry.decision = d));
           for (const [id, w] of this.waiting) if (Date.now() - w.createdAt > 24 * 3600 * 1000) this.waiting.delete(id);
-          reply({ status: "waiting", requestId });
+          // The card to show in the app's chat, with a one-time code only the card gets.
+          let card: Record<string, unknown> | undefined;
+          if (raised && cardAllowed(raised) && this.kernel.pendingApprovals().some((a) => a.approvalId === raised!.approvalId)) {
+            const code = randomBytes(12).toString("base64url");
+            this.cardCodes.set(raised.approvalId, code);
+            card = { approvalId: raised.approvalId, code, summary: raised.summary, service: serviceTitle(raised), risk: raised.capability.risk, effects: raised.capability.effects };
+          }
+          reply({ status: "waiting", requestId, card });
         } else if (req.method === "resolve") {
           // The user answered the card in the app's own chat.
           const r = this.kernel.pendingApprovals().find((a) => a.approvalId === req.params?.approvalId);
           if (!r) return fail("That approval is no longer waiting.");
-          if (!inAppAllowed(r)) return fail("This app can't answer that approval; it has to be answered in Neural.");
+          // Answered on the card in the chat: needs the card's one-time code. Answered in a prompt: needs elicitation.
+          const code = this.cardCodes.get(r.approvalId);
+          const viaCard = !!req.params?.code && !!code && Buffer.byteLength(String(req.params.code)) === Buffer.byteLength(code) && timingSafeEqual(Buffer.from(String(req.params.code)), Buffer.from(code));
+          if (!(viaCard ? cardAllowed(r) : inAppAllowed(r))) return fail("This app can't answer that approval; it has to be answered in Neural.");
+          this.cardCodes.delete(r.approvalId);
           this.kernel.resolveApproval(r.approvalId, req.params?.approve === true);
           reply({ ok: true });
         } else if (req.method === "check") {

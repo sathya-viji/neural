@@ -1,6 +1,6 @@
 {
   "name": "unified-ai-base",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Open, model-independent foundation for intention-centric computing. AI proposes. The kernel authorises.",
   "type": "module",
