@@ -32,7 +32,7 @@ Claude Desktop, ChatGPT, Cursor and other apps that support MCP can act **throug
 When another app asks for something that needs your OK, the kernel's approval card can be answered in three places. Whichever you answer first counts:
 
 - **Neural on your Mac:** the card appears in Neural (with a notification if it's in the background).
-- **In the app's own chat:** turn on *Settings → Other AI apps → Let these apps ask me to approve in their own chat*. Apps that support MCP elicitation (Claude does, on Mac and phone) show Neural's card as a prompt in your conversation. The app draws the prompt and only you can answer it, not the AI. **Anything that spends money is always approved in Neural itself.**
+- **In the app's own chat:** turn on *Settings → Other AI apps → Let these apps ask me to approve in their own chat*. Neural offers its card to the app in two standard ways: as a confirmation prompt (MCP elicitation) and as an interactive card (MCP Apps), whose buttons use tools the AI can't see plus a one-time code. The app draws it and only you can answer it, not the AI. Whether it appears depends on the app: as of November 2026, Claude Desktop's chat doesn't show either for locally run connectors, so approve in Neural or on your phone. **Anything that spends money is always approved in Neural itself.**
 - **On your phone, in Neural's approvals page:** *Settings → Approve from your phone* (same Wi-Fi as the Mac).
 
 If you take longer than about 40 seconds, the app is told the request is waiting for your OK, not that it failed. It can check the outcome later with `neural_check_request`, so nothing is done twice.
