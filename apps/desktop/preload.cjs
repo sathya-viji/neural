@@ -3,7 +3,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 const CHANNELS = new Set([
-  "hello", "ask", "stop", "conversation.new",
+  "hello", "ask", "stop", "conversation.new", "conversation.current", "conversation.list", "conversation.open", "conversation.delete",
   "approvals.pending", "approvals.resolve",
   "capabilities", "policy.get", "policy.set", "roots.add", "roots.remove",
   "audit", "audit.verify", "tasks",

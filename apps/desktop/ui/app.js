@@ -115,9 +115,97 @@ function loadSuggestions(services) {
 }
 $("#stop").addEventListener("click", () => uab.call("stop"));
 $("#new-conversation").addEventListener("click", async () => {
+  if (current) return;
   await uab.call("conversation.new");
+  currentConversation = null;
   transcript.replaceChildren(el("div", { class: "empty" }, el("p", {}, "New conversation. What would you like done?")));
+  loadConversations();
+  showView("ask");
+  input.focus();
 });
+
+/* ---------------- Past conversations ---------------- */
+
+let currentConversation = null;
+
+async function loadConversations() {
+  const list = await uab.call("conversation.list");
+  $("#conv-list").replaceChildren(
+    ...list.map((c) =>
+      el(
+        "div",
+        { class: `conv ${c.id === currentConversation ? "active" : ""}`, title: `${c.title}\n${timeAgo(c.updatedAt)} · ${c.turnCount} ${c.turnCount === 1 ? "question" : "questions"}` },
+        el("button", { class: "conv-open", onclick: () => openConversation(c.id) }, c.title),
+        el(
+          "button",
+          {
+            class: "conv-delete",
+            title: "Delete this conversation",
+            onclick: async () => {
+              if (!confirm(`Delete "${c.title}"? This removes it from this Mac. The Activity history keeps its record of the actions.`)) return;
+              const { currentId } = await uab.call("conversation.delete", c.id);
+              if (!currentId && currentConversation === c.id) {
+                currentConversation = null;
+                transcript.replaceChildren(el("div", { class: "empty" }, el("p", {}, "New conversation. What would you like done?")));
+              }
+              loadConversations();
+            },
+          },
+          "×",
+        ),
+      ),
+    ),
+  );
+}
+
+async function openConversation(id) {
+  if (current) return alert("Wait for the current request to finish, or stop it.");
+  try {
+    showConversation(await uab.call("conversation.open", id));
+    showView("ask");
+  } catch (err) {
+    alert(cleanError(err));
+    loadConversations();
+  }
+}
+
+/** Draw a saved conversation the way it looked: questions, steps and answers. */
+function showConversation(c) {
+  currentConversation = c.id;
+  transcript.replaceChildren(
+    el("div", { class: "conv-intro" }, `${c.title} · started ${timeAgo(c.createdAt)}`),
+    ...c.turns.flatMap((t) => [
+      el("div", { class: "turn-user" }, t.question),
+      el(
+        "div",
+        { class: "turn-ai" },
+        t.model ? el("div", { class: "model-tag" }, t.locality === "cloud" ? el("span", { class: "cloud" }, "☁ ") : "⌂ ", t.model) : null,
+        el(
+          "div",
+          { class: "steps" },
+          ...t.steps.map((s) =>
+            el(
+              "div",
+              { class: `step ${s.status}` },
+              el("div", { class: "icon" }, s.status === "executed" ? "✓" : s.status === "pending" ? "○" : "✕"),
+              el("div", {}, el("div", { class: "title" }, s.title), el("div", { class: "detail" }, s.status === "executed" ? richText(s.detail) : s.detail)),
+              el("div", { class: "meta" }, s.meta || serviceName(s.service)),
+            ),
+          ),
+        ),
+        t.error ? el("div", { class: "error" }, t.error) : null,
+        t.answer && !t.error ? el("div", { class: "answer" }, richText(t.answer)) : null,
+      ),
+    ]),
+  );
+  loadConversations();
+  scrollDown();
+}
+
+function showView(name) {
+  document.querySelectorAll(".nav").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
+  document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${name}`));
+}
 
 function onGateway(e) {
   if (!current) return;
@@ -748,6 +836,7 @@ uab.on((channel, payload) => {
   else if (channel === "services.changed") (rememberServices(payload), loadServices(payload), loadSuggestions(payload));
   else if (channel === "chatgpt.changed" && settings?.cloud.kind === "chatgpt") loadChatGPT();
   else if (channel === "browser.state") onBrowserState(payload);
+  else if (channel === "conversations.changed") (currentConversation = payload.currentId), loadConversations();
 });
 
 /* ---------------- start ---------------- */
@@ -760,6 +849,9 @@ uab.on((channel, payload) => {
   const services = await uab.call("services");
   rememberServices(services);
   loadSuggestions(services);
+  const last = await uab.call("conversation.current");
+  if (last) showConversation(last);
+  else loadConversations();
   for (const req of await uab.call("approvals.pending")) showApproval(req);
   input.focus();
 })();

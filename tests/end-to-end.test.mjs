@@ -253,3 +253,24 @@ test("with many memories, a cloud model gets the ones that relate to the request
   for (const m of notes) assert.ok(local.includes(m));
   for (const m of (await kernel.call("context.get", {})).memories) await kernel.call("context.removeMemory", { id: m.id });
 });
+
+test("conversations are kept on this computer and can be reopened, continued and deleted", async () => {
+  const turn = (question, answer) => ({ question, answer, at: new Date().toISOString(), model: "Test", locality: "local", steps: [{ title: "Find a contact", service: "contacts", status: "executed", detail: "Sam Rivera", meta: "Allowed" }] });
+  const { id } = await kernel.call("conversations.appendTurn", { turn: turn("Who is Sam?", "Sam Rivera, a colleague."), history: [{ role: "user", content: "Who is Sam?" }] });
+  await kernel.call("conversations.appendTurn", { id, turn: turn("And his email?", "sam.rivera@example.com"), history: [1, 2, 3] });
+  await new Promise((r) => setTimeout(r, 5));
+  const { id: other } = await kernel.call("conversations.appendTurn", { turn: turn("Weather?", "Sunny."), history: [] });
+
+  const list = await kernel.call("conversations.list", {});
+  assert.deepEqual(list.slice(0, 2).map((c) => c.id), [other, id]); // newest first
+  const c = await kernel.call("conversations.get", { id });
+  assert.equal(c.title, "Who is Sam?");
+  assert.equal(c.turns.length, 2);
+  assert.deepEqual(c.history, [1, 2, 3]);
+  assert.ok(readdirSync(join(home, "conversations")).includes(`${id}.json`));
+
+  await kernel.call("conversations.delete", { id });
+  await assert.rejects(kernel.call("conversations.get", { id }), /no longer exists/);
+  await assert.rejects(kernel.call("conversations.get", { id: "../audit" }), /Unknown conversation/);
+  await kernel.call("conversations.delete", { id: other });
+});

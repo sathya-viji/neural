@@ -235,3 +235,16 @@ button.small { padding: 4px 10px; font-size: 12.5px; }
 .view > .segmented { align-self: flex-start; }
 #memory-form { width: 100%; max-width: 720px; }
 #memory-text { flex: 1; min-width: 0; }
+/* Recent conversations in the sidebar */
+.recent { margin-top: 18px; display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.recent-head { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0 10px 6px; }
+#conv-list { overflow-y: auto; display: grid; gap: 1px; align-content: start; }
+.conv { display: flex; align-items: center; border-radius: 7px; }
+.conv:hover, .conv.active { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.conv.active .conv-open { color: var(--text); }
+.conv-open { flex: 1; min-width: 0; text-align: left; background: none; border: 0; color: var(--muted); font-size: 12.5px; padding: 6px 10px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-delete { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 2px 8px; font-size: 14px; visibility: hidden; }
+.conv:hover .conv-delete { visibility: visible; }
+.conv-delete:hover { color: var(--bad); }
+.sidebar-foot { margin-top: 12px; }
+.conv-intro { color: var(--muted); font-size: 12px; text-align: center; }

@@ -22,10 +22,11 @@ import {
   probeModels,
   rankGeminiModels,
   GEMINI_BASE_URL,
+  type GatewayEvent,
   type Message,
   type ModelSettings,
 } from "@uab/gateway";
-import type { KernelEvent, Permission } from "@uab/protocol";
+import type { ConversationTurn, KernelEvent, Permission } from "@uab/protocol";
 import { MiniBrowser, refersToPage } from "./browser.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -35,6 +36,8 @@ let win: BrowserWindow | null = null;
 let kernel: KernelClient;
 let kernelHome = "";
 let history: Message[] = [];
+/** The conversation on screen; saved by the kernel after each turn. Undefined until the first question. */
+let conversationId: string | undefined;
 let running: AbortController | null = null;
 let browser: MiniBrowser | null = null;
 
@@ -77,6 +80,8 @@ async function ask(text: string): Promise<void> {
     return;
   }
   running = new AbortController();
+  stepIds.clear();
+  const turn: ConversationTurn = { question: text, at: new Date().toISOString(), steps: [] };
   try {
     // Who the user is and what they asked to be remembered. The kernel decides how much of it
     // this model gets (less for cloud models).
@@ -94,6 +99,7 @@ async function ask(text: string): Promise<void> {
       context,
       signal: running.signal,
       onEvent: (e) => {
+        record(turn, e);
         // "Show a web page" results open in the browser panel.
         if (e.type === "decision" && e.decision.status === "executed") {
           const target = (e.decision.result.data as { openInBrowser?: string } | undefined)?.openInBrowser;
@@ -105,8 +111,53 @@ async function ask(text: string): Promise<void> {
     // Keep the conversation for follow-ups: what was asked and answered, not each
     // turn's tool steps. Old tool results without their calls break providers.
     history = conversationOnly(result.messages, result.text).slice(-20);
+  } catch (err) {
+    turn.error = (err as Error).message;
+    throw err;
   } finally {
     running = null;
+    if (turn.answer === undefined && !turn.error) turn.error = "Stopped before finishing.";
+    await saveTurn(turn);
+  }
+}
+
+/** Keep what the user saw of this turn, so the conversation can be reopened after a restart. */
+function record(turn: ConversationTurn, e: GatewayEvent): void {
+  if (e.type === "task") (turn.model = e.model), (turn.locality = e.locality);
+  else if (e.type === "proposal") {
+    const detail = Object.entries(e.args ?? {})
+      .filter(([, v]) => v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length))
+      .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : typeof v === "object" ? JSON.stringify(v) : v}`)
+      .join(" · ")
+      .slice(0, 160);
+    stepIds.set(e.callId, turn.steps.push({ title: e.capability.title, service: e.capability.service, status: "pending", detail, meta: "" }) - 1);
+  } else if (e.type === "decision") {
+    const step = turn.steps[stepIds.get(e.callId) ?? -1];
+    if (!step) return;
+    const d = e.decision;
+    step.status = d.status;
+    if (d.status === "executed") {
+      step.detail = d.replayed ? "Already done earlier — not repeated." : d.result.content.split("\n").slice(0, 3).join("\n").slice(0, 600);
+      step.meta = d.approvedBy === "user" ? "You approved" : d.verified ? "Allowed" : "Not verified";
+    } else if (d.status === "denied") {
+      step.detail = d.reason;
+      step.meta = d.by === "user" ? "You declined" : "Blocked";
+    } else {
+      step.detail = d.error;
+      step.meta = "Failed";
+    }
+  } else if (e.type === "done") turn.answer = e.text;
+  else if (e.type === "error") turn.error = e.message;
+}
+const stepIds = new Map<string, number>();
+
+async function saveTurn(turn: ConversationTurn): Promise<void> {
+  try {
+    const { id } = await kernel.call("conversations.appendTurn", { id: conversationId, turn, history });
+    conversationId = id;
+    send("conversations.changed", { currentId: id });
+  } catch (err) {
+    process.stderr.write(`[app] couldn't save the conversation: ${(err as Error).message}\n`);
   }
 }
 
@@ -150,7 +201,21 @@ function registerIpc(): void {
     return {};
   });
   handle("stop", () => (running?.abort(), {}));
-  handle("conversation.new", () => ((history = []), {}));
+  handle("conversation.new", () => ((history = []), (conversationId = undefined), {}));
+  handle("conversation.current", async () => (conversationId ? kernel.call("conversations.get", { id: conversationId }).catch(() => null) : null));
+  handle("conversation.list", () => kernel.call("conversations.list", { limit: 50 }));
+  handle("conversation.open", async (id: string) => {
+    if (running) throw new Error("Wait for the current request to finish, or stop it.");
+    const c = await kernel.call("conversations.get", { id: String(id) });
+    conversationId = c.id;
+    history = c.history as Message[];
+    return c;
+  });
+  handle("conversation.delete", async (id: string) => {
+    await kernel.call("conversations.delete", { id: String(id) });
+    if (id === conversationId) (conversationId = undefined), (history = []);
+    return { currentId: conversationId ?? null };
+  });
 
   handle("approvals.pending", () => kernel.call("approvals.pending", {}));
   handle("approvals.resolve", (approvalId: string, approve: boolean) => kernel.call("approvals.resolve", { approvalId, approve: !!approve }));
@@ -294,6 +359,12 @@ async function startKernel(): Promise<void> {
   });
   await kernel.start();
   kernelHome = (await kernel.call("kernel.hello", {})).home;
+  // Pick up where the user left off, if that was in the last 12 hours.
+  const [last] = await kernel.call("conversations.list", { limit: 1 }).catch(() => []);
+  if (last && Date.now() - new Date(last.updatedAt).getTime() < 12 * 3600 * 1000) {
+    const c = await kernel.call("conversations.get", { id: last.id }).catch(() => null);
+    if (c) (conversationId = c.id), (history = c.history as Message[]);
+  }
 }
 
 function createWindow(): void {

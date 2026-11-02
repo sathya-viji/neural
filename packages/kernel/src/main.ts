@@ -11,6 +11,7 @@ import { Kernel, KERNEL_VERSION } from "./kernel.js";
 import { gmail } from "./builtin/gmail.js";
 import { chatgpt } from "./chatgpt.js";
 import { ModelKey } from "./model-key.js";
+import { ConversationStore } from "./conversations.js";
 
 type Handlers = { [M in keyof KernelMethods]: (params: KernelMethods[M]["params"]) => Promise<KernelMethods[M]["result"]> | KernelMethods[M]["result"] };
 
@@ -24,6 +25,7 @@ const events: KernelEvent[] = ["approval.requested", "approval.resolved", "audit
 for (const event of events) kernel.on(event, (params) => send({ jsonrpc: "2.0", method: event, params }));
 
 const modelKey = new ModelKey(kernel.vault);
+const conversations = new ConversationStore(kernel.home);
 
 const handlers: Handlers = {
   "kernel.hello": () => ({ version: KERNEL_VERSION, identity: kernel.identity, home: kernel.home }),
@@ -65,6 +67,10 @@ const handlers: Handlers = {
   "context.addMemory": ({ text }) => kernel.context.addMemory(text, "user"),
   "context.removeMemory": ({ id }) => (kernel.context.removeMemory(id), {}),
   "context.build": async ({ intent, cloud }) => ({ text: await kernel.context.build(intent, { cloud, recent: kernel.listTasks(10) }) }),
+  "conversations.list": ({ limit }) => conversations.list(limit),
+  "conversations.get": ({ id }) => conversations.get(id),
+  "conversations.appendTurn": ({ id, turn, history }) => conversations.appendTurn(id, turn, history),
+  "conversations.delete": ({ id }) => (conversations.delete(id), {}),
   "vault.list": async () => {
     const entries = [
       { name: "model.cloud", label: "Cloud model API key (Gemini, Claude or other)" },

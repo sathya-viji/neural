@@ -152,6 +152,35 @@ export interface Memory {
   source: "user" | "ai";
 }
 
+/** One question and what happened, as shown in the app. */
+export interface ConversationTurn {
+  question: string;
+  answer?: string;
+  error?: string;
+  at: string;
+  model?: string;
+  locality?: "local" | "cloud";
+  steps: { title: string; service: string; status: "executed" | "denied" | "failed" | "pending"; detail: string; meta: string }[];
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  turns: ConversationTurn[];
+  /** What the AI is given to continue the conversation (questions and final answers). */
+  history: unknown[];
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  turnCount: number;
+}
+
 export interface Identity {
   userId: string;
   displayName: string;
@@ -172,6 +201,10 @@ export interface KernelMethods {
   "context.addMemory": { params: { text: string }; result: Memory };
   "context.removeMemory": { params: { id: string }; result: {} };
   "context.build": { params: { intent: string; cloud: boolean }; result: { text: string } };
+  "conversations.list": { params: { limit?: number }; result: ConversationSummary[] };
+  "conversations.get": { params: { id: string }; result: Conversation };
+  "conversations.appendTurn": { params: { id?: string; turn: ConversationTurn; history: unknown[] }; result: { id: string } };
+  "conversations.delete": { params: { id: string }; result: {} };
   "vault.list": { params: {}; result: { name: string; label: string }[] };
   "vault.remove": { params: { name: string }; result: {} };
   "services.add": { params: { name: string; url?: string; command?: string }; result: { id: string } };
