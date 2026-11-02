@@ -27,6 +27,16 @@ Claude Desktop, ChatGPT, Cursor and other apps that support MCP can act **throug
 3. Paste it into the other app's MCP configuration. For **Claude Desktop**: Settings → Developer → Edit Config, merge it into `claude_desktop_config.json`, and restart Claude Desktop.
 4. Keep Neural open while you use it. If it's closed, the other app gets a short message asking you to open it.
 
+## Approving from anywhere
+
+When another app asks for something that needs your OK, the kernel's approval card can be answered in three places. Whichever you answer first counts:
+
+- **Neural on your Mac:** the card appears in Neural (with a notification if it's in the background).
+- **In the app's own chat:** turn on *Settings → Other AI apps → Let these apps ask me to approve in their own chat*. Apps that support MCP elicitation (Claude does, on Mac and phone) show Neural's card as a prompt in your conversation. The app draws the prompt and only you can answer it, not the AI. **Anything that spends money is always approved in Neural itself.**
+- **On your phone, in Neural's approvals page:** *Settings → Approve from your phone* (same Wi-Fi as the Mac).
+
+If you take longer than about 40 seconds, the app is told the request is waiting for your OK, not that it failed. It can check the outcome later with `neural_check_request`, so nothing is done twice.
+
 ## How it stays safe
 
 - **Off by default.** Nothing can connect until you switch it on.
