@@ -4,3 +4,4 @@ dist/
 .DS_Store
 .uab-test*/
 packages/gateway/native/bin/
+packages/kernel/models/all-MiniLM-L6-v2/

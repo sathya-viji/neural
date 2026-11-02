@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Memory, Profile, TaskRecord } from "@uab/protocol";
 import { readJson, writeJson } from "./store.js";
+import { Embedder } from "./embed.js";
 
 interface Saved {
   profile: Profile;
@@ -21,6 +22,7 @@ const WORD = /[a-z0-9]{3,}/g;
  */
 export class ContextStore {
   private path: string;
+  private embedder = new Embedder();
 
   constructor(home: string) {
     this.path = join(home, "context.json");
@@ -73,7 +75,7 @@ export class ContextStore {
    * goes only with requests that need it, and only memories that relate to the
    * request (or the newest few) are sent.
    */
-  build(intent: string, opts: { cloud: boolean; recent?: TaskRecord[] }): string {
+  async build(intent: string, opts: { cloud: boolean; recent?: TaskRecord[] }): Promise<string> {
     const { profile, memories } = this.get();
     const lines: string[] = [];
     const about: string[] = [];
@@ -84,7 +86,7 @@ export class ContextStore {
     if (profile.about) about.push(`- In their own words: ${profile.about}`);
     if (about.length) lines.push("About the person you're helping:", ...about);
 
-    const shown = opts.cloud && memories.length > 12 ? pickRelevant(memories, intent, 10) : memories;
+    const shown = opts.cloud && memories.length > 12 ? await this.relevant(memories, intent, 10) : memories;
     if (shown.length) lines.push("", "Things they asked you to remember:", ...shown.map((m) => `- ${m.text}`));
 
     // What was done recently (today and yesterday), so "do that again" or "the same place" make sense.
@@ -95,7 +97,67 @@ export class ContextStore {
     }
     return lines.join("\n").trim();
   }
+
+  /**
+   * Memories that relate to a request, picked on this computer by the bundled
+   * embedding model: by topic (a dinner request brings food, health and payment
+   * notes) or by close meaning. Falls back to shared words if the model isn't there.
+   */
+  async relevant(memories: Memory[], intent: string, max: number): Promise<Memory[]> {
+    if (!intent.trim() || !this.embedder.available) return pickRelevant(memories, intent, max);
+    try {
+      const wanted = new Set((await this.topics(intent, 0.08)).flatMap((t) => RELATED[t] ?? [t]));
+      const scored = await Promise.all(
+        memories.map(async (m) => {
+          const direct = await this.embedder.similarity(intent, m.text);
+          const onTopic = (await this.topics(m.text, 0.05)).some((t) => wanted.has(t));
+          return { m, score: (onTopic ? 1 : 0) + direct, keep: onTopic || direct >= 0.25 };
+        }),
+      );
+      const keyword = new Set(rank(memories, intent));
+      return scored
+        .filter((x) => x.keep || keyword.has(x.m))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, max)
+        .map((x) => x.m);
+    } catch {
+      return pickRelevant(memories, intent, max);
+    }
+  }
+
+  /** The topics a text is mostly about: the best one and any within `margin` of it. */
+  private async topics(text: string, margin: number): Promise<string[]> {
+    const names = Object.keys(TOPICS);
+    const scores = await Promise.all(names.map((n) => this.embedder.similarity(text, TOPICS[n])));
+    const best = Math.max(...scores);
+    return names.filter((_, i) => scores[i] >= best - margin);
+  }
 }
+
+/** What each topic means, for the embedding model. */
+const TOPICS: Record<string, string> = {
+  food: "food, eating, meals, restaurants, cooking, diet, ordering food, dinner, lunch",
+  health: "health, allergies, medicine, doctor, fitness, illness",
+  money: "money, payments, paying, cash, cards, prices, budget, shopping",
+  work: "work, job, office, meetings, colleagues, working from home",
+  family: "family, children, school, parents, partner, kids",
+  travel: "travel, trips, flights, hotels, commute, taxi, directions",
+  leisure: "sports, hobbies, movies, music, games, weekends, fun",
+  communication: "email, messages, writing style, tone, language, replies",
+  home: "home, address, deliveries, house, neighbourhood",
+};
+/** A request about one topic also needs notes from these (food → allergies and how you pay). */
+const RELATED: Record<string, string[]> = {
+  food: ["food", "health", "money"],
+  health: ["health", "food", "work"],
+  money: ["money"],
+  work: ["work", "communication", "travel"],
+  family: ["family", "home"],
+  travel: ["travel", "money", "home", "work"],
+  leisure: ["leisure", "family"],
+  communication: ["communication", "work", "family"],
+  home: ["home", "money"],
+};
 
 function words(text: string): Set<string> {
   return new Set(text.toLowerCase().match(WORD) ?? []);

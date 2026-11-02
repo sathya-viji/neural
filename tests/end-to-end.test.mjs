@@ -240,3 +240,16 @@ test("context: who you are and what to remember, with less sent to cloud models"
   assert.match(approvals.at(-1).summary, /Forget: "Vegetarian"/);
   assert.equal((await kernel.call("context.get", {})).memories.length, 0);
 });
+
+test("with many memories, a cloud model gets the ones that relate to the request, picked by meaning on this computer", async () => {
+  const notes = ["Vegetarian", "Prefers cash on delivery", "Works from home on Fridays", "Allergic to peanuts", "Daughter's school is DPS", "Supports Chennai Super Kings", "Keep emails short and formal", "Has diabetes", "Wife's name is Priya", "Office is in Whitefield", "Doesn't like spicy food", "Learning Spanish", "Gym on weekday mornings"];
+  for (const text of notes) await kernel.call("context.addMemory", { text });
+  const cloud = (await kernel.call("context.build", { intent: "book me a table for dinner tonight", cloud: true })).text;
+  // Shares no words with the request, but matters for dinner.
+  for (const m of ["Allergic to peanuts", "Vegetarian", "Prefers cash on delivery"]) assert.ok(cloud.includes(m), `${m} should be sent`);
+  for (const m of ["Daughter's school is DPS", "Learning Spanish", "Supports Chennai Super Kings"]) assert.ok(!cloud.includes(m), `${m} shouldn't be sent`);
+  // A model on this Mac gets everything.
+  const local = (await kernel.call("context.build", { intent: "book me a table for dinner tonight", cloud: false })).text;
+  for (const m of notes) assert.ok(local.includes(m));
+  for (const m of (await kernel.call("context.get", {})).memories) await kernel.call("context.removeMemory", { id: m.id });
+});
