@@ -68,8 +68,11 @@ const server = new Server({ name: "neural", version: "0.3.1" }, { capabilities: 
 /** The app can show interactive cards in its chat (MCP Apps). */
 const canShowCard = () => !!(server.getClientCapabilities() as { extensions?: Record<string, unknown> } | undefined)?.extensions?.["io.modelcontextprotocol/ui"];
 
-server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [{ uri: CARD_URI, name: "Neural approval card", mimeType: CARD_MIME }] }));
+// Diagnostics go to the app's MCP log (stderr), never to the AI.
+const log = (msg: string) => console.error(`[neural] ${msg}`);
+server.setRequestHandler(ListResourcesRequestSchema, async () => (log("app listed resources"), { resources: [{ uri: CARD_URI, name: "Neural approval card", mimeType: CARD_MIME }] }));
 server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
+  log(`app read resource ${req.params.uri}`);
   if (req.params.uri !== CARD_URI) throw new Error("No such resource");
   return { contents: [{ uri: CARD_URI, mimeType: CARD_MIME, text: approvalCardHtml }] };
 });
@@ -137,6 +140,7 @@ const CHECK_TOOL = {
 /** A kernel decision in words for the AI. */
 function outcome(d: Decision | { status: "waiting"; requestId: string; card?: Record<string, unknown> }) {
   if (d.status === "waiting") {
+    log(`waiting for approval; card ${d.card ? "sent to the app" : "not offered"}`);
     const where = d.card ? "an approval card is shown right here in the chat (and in Neural)" : "it's waiting in Neural (on the Mac, or on their phone if they've set that up)";
     return {
       content: [
@@ -174,7 +178,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: c.inputSchema?.type ? c.inputSchema : { type: "object", properties: {} },
         annotations: { title: c.title, readOnlyHint: readOnly, destructiveHint: c.effects.includes("delete"), openWorldHint: c.effects.some((e) => e === "send" || e === "spend") },
         // Actions that may need approval show Neural's card in the chat.
-        ...(!readOnly && canShowCard() ? { _meta: { ui: { resourceUri: CARD_URI } } } : {}),
+        // Current key plus the older flat one that some hosts still read.
+        ...(!readOnly && canShowCard() ? { _meta: { ui: { resourceUri: CARD_URI }, "ui/resourceUri": CARD_URI } } : {}),
       };
     })],
   };
@@ -193,6 +198,7 @@ async function callTool(name: string, args: Record<string, unknown>) {
   const call = await kernel(clientName());
   if (name === CHECK_TOOL.name || name === STATUS_TOOL.name) return outcome(await call("check", { requestId: String(args.request_id ?? "") }));
   if (name === ANSWER_TOOL.name) {
+    log(`approval card answered: ${args.approve === true ? "allow" : "decline"}`);
     await call("resolve", { approvalId: String(args.approval_id ?? ""), code: String(args.code ?? ""), approve: args.approve === true });
     return { content: [{ type: "text" as const, text: args.approve === true ? "Allowed." : "Declined." }] };
   }
@@ -200,6 +206,7 @@ async function callTool(name: string, args: Record<string, unknown>) {
   const cap = capabilities.find((c) => capabilityToToolName(c.id) === name);
   if (!cap) return { isError: true, content: [{ type: "text", text: `Neural has no tool called ${name}` }] };
   // Answer before the app's tool timeout (about a minute); a waiting approval gets a request id instead.
+  log(`tool ${name}${canShowCard() ? " (card supported)" : ""}`);
   return outcome(await call("call", { capability: cap.id, args: args, waitMs: Number(process.env.NEURAL_WAIT_MS) || (canShowCard() ? 2_500 : 40_000) }));
 }
 
