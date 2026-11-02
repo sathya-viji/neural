@@ -78,12 +78,17 @@ async function ask(text: string): Promise<void> {
   }
   running = new AbortController();
   try {
+    // Who the user is and what they asked to be remembered. The kernel decides how much of it
+    // this model gets (less for cloud models).
+    const parts: string[] = [];
+    const known = await kernel.call("context.build", { intent: text, cloud: gateway.locality === "cloud" }).catch(() => ({ text: "" }));
+    if (known.text) parts.push(known.text);
     // If the request is about the page open in the browser panel, the AI gets that page's text.
-    let context: string | undefined;
     if (browser?.state().open && refersToPage(text)) {
       const page = await browser.pageText().catch(() => null);
-      if (page) context = `The user is looking at this page in the app's browser.\nTitle: ${page.title}\nAddress: ${page.url}\n\n${page.text}`;
+      if (page) parts.push(`The user is looking at this page in the app's browser.\nTitle: ${page.title}\nAddress: ${page.url}\n\n${page.text}`);
     }
+    const context = parts.join("\n\n") || undefined;
     const result = await gateway.run(text, {
       history,
       context,
@@ -183,6 +188,13 @@ function registerIpc(): void {
   );
   handle("services.remove", (id: string) => kernel.call("services.remove", { id: String(id) }));
   handle("vault.list", () => kernel.call("vault.list", {}));
+  handle("context.get", () => kernel.call("context.get", {}));
+  handle("context.setProfile", (profile: Record<string, unknown>) =>
+    kernel.call("context.setProfile", { profile: Object.fromEntries(Object.entries(profile ?? {}).map(([k, v]) => [k, String(v ?? "")])) }),
+  );
+  handle("context.addMemory", (text: string) => kernel.call("context.addMemory", { text: String(text) }));
+  handle("context.removeMemory", (id: string) => kernel.call("context.removeMemory", { id: String(id) }));
+  handle("context.preview", (cloud: boolean) => kernel.call("context.build", { intent: "", cloud: !!cloud }));
   handle("vault.remove", (name: string) => kernel.call("vault.remove", { name: String(name) }));
   handle("services.edit", () => shell.openPath(join(kernelHome, "services.json")));
 

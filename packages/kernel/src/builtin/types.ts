@@ -1,11 +1,15 @@
-import type { ActionResult, Capability, Policy } from "@uab/protocol";
+import type { ActionResult, Capability, Policy, TaskRecord } from "@uab/protocol";
 import type { Vault } from "../vault.js";
+import type { ContextStore } from "../context.js";
 
 export interface ProviderContext {
   home: string;
   policy(): Policy;
   /** For services that need a stored key or account. */
   vault?: Vault;
+  /** Who the user is and what they asked to be remembered. */
+  context?: ContextStore;
+  recentTasks?(limit: number): TaskRecord[];
 }
 
 /** A capability implemented inside the kernel process itself. */
@@ -19,7 +23,7 @@ export interface BuiltinCapability extends Capability {
    * One plain sentence for the approval card. Written by the kernel, never by a model.
    * May look things up (e.g. the titles behind ids) so the card shows what will really happen.
    */
-  summarize?(args: Record<string, unknown>): string | Promise<string>;
+  summarize?(args: Record<string, unknown>, ctx: ProviderContext): string | Promise<string>;
 }
 
 export function str(args: Record<string, unknown>, key: string, required = true): string {

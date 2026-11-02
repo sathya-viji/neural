@@ -213,3 +213,30 @@ test("saved sign-ins and keys are listed by name only, and can be removed", asyn
   assert.equal((await kernel.call("model.hasKey", {})).present, false);
   assert.ok(!(await kernel.call("vault.list", {})).some((e) => e.name === "model.cloud"));
 });
+
+test("context: who you are and what to remember, with less sent to cloud models", async () => {
+  await kernel.call("context.setProfile", { profile: { name: "Asha", city: "Bengaluru", address: "12 MG Road", about: "Keep answers short." } });
+  const { taskId } = await kernel.call("task.start", { intent: "I'm vegetarian" });
+  const saved = await kernel.call("propose", { taskId, capability: "memory.remember", args: { text: "Vegetarian" }, source: "agent" });
+  assert.equal(saved.status, "executed");
+  assert.equal(saved.approvedBy, "user"); // saving a memory asks first
+  assert.match(approvals.at(-1).summary, /Remember: "Vegetarian"/);
+  await kernel.call("task.end", { taskId, summary: "Saved that you're vegetarian." });
+
+  const local = (await kernel.call("context.build", { intent: "what's on today", cloud: false })).text;
+  assert.match(local, /Name: Asha/);
+  assert.match(local, /12 MG Road/);
+  assert.match(local, /- Vegetarian/);
+  assert.match(local, /Recently done/);
+  // A cloud model gets the address only when the request needs it.
+  assert.doesNotMatch((await kernel.call("context.build", { intent: "what's on today", cloud: true })).text, /MG Road/);
+  assert.match((await kernel.call("context.build", { intent: "order dinner", cloud: true })).text, /MG Road/);
+
+  const recent = await kernel.call("propose", { taskId, capability: "memory.recent", args: { search: "vegetarian" }, source: "agent" });
+  assert.match(recent.result.content, /Saved that you're vegetarian/);
+
+  const forget = await kernel.call("propose", { taskId, capability: "memory.forget", args: { what: "that I'm vegetarian" }, source: "agent" });
+  assert.equal(forget.status, "executed");
+  assert.match(approvals.at(-1).summary, /Forget: "Vegetarian"/);
+  assert.equal((await kernel.call("context.get", {})).memories.length, 0);
+});

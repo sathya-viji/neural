@@ -135,6 +135,23 @@ export interface TaskRecord {
   summary?: string;
 }
 
+/** What the user tells the app about themselves. Every field is optional. */
+export interface Profile {
+  name?: string;
+  city?: string;
+  address?: string;
+  language?: string;
+  about?: string;
+}
+
+export interface Memory {
+  id: string;
+  text: string;
+  createdAt: string;
+  /** "user": typed in the app. "ai": suggested by the AI and approved by the user. */
+  source: "user" | "ai";
+}
+
 export interface Identity {
   userId: string;
   displayName: string;
@@ -150,6 +167,11 @@ export interface KernelMethods {
   "services.reload": { params: {}; result: ServiceInfo[] };
   "services.signIn": { params: { id: string }; result: { url: string } };
   "services.signOut": { params: { id: string }; result: ServiceInfo[] };
+  "context.get": { params: {}; result: { profile: Profile; memories: Memory[]; identity: Identity } };
+  "context.setProfile": { params: { profile: Profile }; result: Profile };
+  "context.addMemory": { params: { text: string }; result: Memory };
+  "context.removeMemory": { params: { id: string }; result: {} };
+  "context.build": { params: { intent: string; cloud: boolean }; result: { text: string } };
   "vault.list": { params: {}; result: { name: string; label: string }[] };
   "vault.remove": { params: { name: string }; result: {} };
   "services.add": { params: { name: string; url?: string; command?: string }; result: { id: string } };

@@ -17,6 +17,7 @@
         </div>
       </div>
       <button class="nav active" data-view="ask">Ask</button>
+      <button class="nav" data-view="you">You</button>
       <button class="nav" data-view="activity">Activity</button>
       <button class="nav" data-view="permissions">Permissions</button>
       <button class="nav" data-view="services">Services</button>
@@ -49,6 +50,40 @@
           <button type="submit" class="primary" id="send">Go</button>
           <button type="button" class="ghost hidden" id="stop">Stop</button>
         </form>
+      </section>
+
+      <!-- You -->
+      <section class="view" id="view-you">
+        <header class="view-head"><h1>You</h1></header>
+        <p class="lede">What the AI knows about you, so you don't have to repeat yourself. It's kept on this Mac by the kernel, and you decide what's in it. Everything is optional.</p>
+
+        <h2>About you</h2>
+        <div class="card" id="profile">
+          <div class="grid2">
+            <label>Name <input id="p-name" placeholder="What should the AI call you?" autocomplete="off" /></label>
+            <label>City <input id="p-city" placeholder="e.g. Bengaluru" autocomplete="off" /></label>
+          </div>
+          <label>Home / delivery address <input id="p-address" placeholder="Used for deliveries and things near you" autocomplete="off" /></label>
+          <label>Language for answers <input id="p-language" placeholder="e.g. English, Tamil, Hindi" autocomplete="off" /></label>
+          <label>Anything else the AI should know <textarea id="p-about" rows="3" placeholder="e.g. I work from home on Fridays. Keep answers short."></textarea></label>
+          <div class="row"><button class="primary" id="p-save">Save</button><span class="hint" id="p-status"></span></div>
+        </div>
+
+        <h2>Things to remember</h2>
+        <p class="lede">The AI can suggest adding to this when you mention a preference ("I'm vegetarian"). Nothing is saved without your OK.</p>
+        <div id="memories" class="stack"></div>
+        <form class="row" id="memory-form">
+          <input id="memory-text" placeholder="Add something, e.g. Prefer cash on delivery" autocomplete="off" style="flex: 1" />
+          <button class="ghost" type="submit">Add</button>
+        </form>
+
+        <h2>What the AI sees</h2>
+        <p class="lede">This is sent with each request. A model on this Mac gets all of it. A cloud model gets your home address only when a request needs it (deliveries, food, places near you), and only the memories that relate to the request when you have many.</p>
+        <div class="segmented" id="preview-mode">
+          <button data-cloud="1" class="on">Cloud model</button>
+          <button data-cloud="0">On this Mac</button>
+        </div>
+        <pre class="example" id="context-preview"></pre>
       </section>
 
       <!-- Activity -->

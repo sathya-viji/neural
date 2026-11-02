@@ -13,6 +13,7 @@ import { systemCapabilities } from "./builtin/system.js";
 import { appleCapabilities } from "./builtin/apple.js";
 import { gmail, gmailCapabilities } from "./builtin/gmail.js";
 import { webCapabilities } from "./builtin/web.js";
+import { memoryCapabilities } from "./builtin/memory.js";
 import { readJson, writeJson } from "./store.js";
 import type { Vault } from "./vault.js";
 
@@ -48,6 +49,7 @@ const BUILTIN_TITLES: Record<string, string> = {
   gmail: "Gmail",
   web: "Web & weather",
   browser: "Built-in browser",
+  memory: "Memory",
   system: "This computer",
 };
 
@@ -73,7 +75,7 @@ export class ServiceHub {
   constructor(private ctx: ProviderContext, private vault: Vault) {
     this.ctx = { ...ctx, vault };
     const personal = useAppleApps ? appleCapabilities : [...contactCapabilities, ...mailCapabilities];
-    for (const cap of [...fileCapabilities, ...personal, ...gmailCapabilities, ...webCapabilities, ...systemCapabilities]) {
+    for (const cap of [...fileCapabilities, ...personal, ...gmailCapabilities, ...webCapabilities, ...memoryCapabilities, ...systemCapabilities]) {
       this.builtins.set(cap.id, cap);
     }
     this.configPath = join(ctx.home, "services.json");
@@ -281,7 +283,7 @@ export class ServiceHub {
     const builtin = this.builtins.get(id);
     if (builtin?.summarize) {
       try {
-        return await builtin.summarize(args);
+        return await builtin.summarize(args, this.ctx);
       } catch {
         /* fall through to the generic summary */
       }

@@ -17,6 +17,7 @@ import type {
 import { PolicyStore } from "./policy.js";
 import { AuditLog } from "./audit.js";
 import { Vault } from "./vault.js";
+import { ContextStore } from "./context.js";
 import { ServiceHub } from "./hub.js";
 import { readJson, resolveHome, writeJson } from "./store.js";
 
@@ -42,6 +43,7 @@ export class Kernel extends EventEmitter {
   readonly audit: AuditLog;
   readonly vault: Vault;
   readonly hub: ServiceHub;
+  readonly context: ContextStore;
 
   private pending = new Map<string, Pending>();
   /** Actions already done in a task, so a repeated proposal never runs twice. */
@@ -56,7 +58,8 @@ export class Kernel extends EventEmitter {
     this.policy = new PolicyStore(home);
     this.audit = new AuditLog(home);
     this.vault = new Vault(home);
-    this.hub = new ServiceHub({ home, policy: () => this.policy.get() }, this.vault);
+    this.context = new ContextStore(home);
+    this.hub = new ServiceHub({ home, policy: () => this.policy.get(), context: this.context, recentTasks: (n) => this.listTasks(n) }, this.vault);
     this.tasksPath = join(home, "tasks.jsonl");
     this.loadTasks();
   }

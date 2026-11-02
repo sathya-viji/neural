@@ -60,6 +60,11 @@ const handlers: Handlers = {
   "model.saveKey": async ({ value, endpoint }) => (await modelKey.save(value, endpoint), {}),
   "model.hasKey": async () => ({ present: await modelKey.has() }),
   "model.fetch": (req) => modelKey.fetch(req),
+  "context.get": () => ({ ...kernel.context.get(), identity: kernel.identity }),
+  "context.setProfile": ({ profile }) => kernel.context.setProfile(profile),
+  "context.addMemory": ({ text }) => kernel.context.addMemory(text, "user"),
+  "context.removeMemory": ({ id }) => (kernel.context.removeMemory(id), {}),
+  "context.build": ({ intent, cloud }) => ({ text: kernel.context.build(intent, { cloud, recent: kernel.listTasks(10) }) }),
   "vault.list": async () => {
     const entries = [
       { name: "model.cloud", label: "Cloud model API key (Gemini, Claude or other)" },

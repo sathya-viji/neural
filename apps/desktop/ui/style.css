@@ -226,3 +226,12 @@ button.small { padding: 4px 10px; font-size: 12.5px; }
 .task, .task > *, .entry > * { min-width: 0; }
 .task-summary { overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .entry > div:nth-child(2) { overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+#profile textarea { resize: vertical; }
+#context-preview { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 3em; }
+#profile textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; color: var(--text); }
+/* Long pages scroll instead of squashing their parts. */
+.view > * { flex-shrink: 0; }
+.view > .segmented { align-self: flex-start; }
+#memory-form { width: 100%; max-width: 720px; }
+#memory-text { flex: 1; min-width: 0; }

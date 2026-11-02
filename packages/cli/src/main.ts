@@ -48,7 +48,9 @@ try {
     console.log('Usage: uab "what you want done"   |   uab --activity   |   uab --services');
   } else {
     const gateway = new Gateway(kernel, createProvider(settings, kernel));
+    const known = await kernel.call("context.build", { intent: arg, cloud: gateway.locality === "cloud" });
     await gateway.run(arg, {
+      context: known.text || undefined,
       onEvent(e) {
         if (e.type === "task") console.log(`Using ${e.model} (${e.locality})`);
         if (e.type === "thinking") console.log(`… ${e.text}`);

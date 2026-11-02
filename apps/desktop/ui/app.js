@@ -32,7 +32,7 @@ function rememberServices(list) {
 }
 
 // What an action does, in plain words.
-const EFFECT_WORDS = { read: "Only looks", write: "Changes something", send: "Sends or orders", delete: "Deletes something" };
+const EFFECT_WORDS = { read: "Only looks", write: "Changes something", send: "Sends or orders", delete: "Deletes something", spend: "Spends money", device: "Uses this Mac" };
 const RISK_WORDS = { low: "Low risk", medium: "Medium risk", high: "High risk" };
 function effectBadges(cap) {
   const effects = cap.effects.includes("read") && cap.effects.length > 1 ? cap.effects.filter((x) => x !== "read") : cap.effects;
@@ -41,7 +41,7 @@ function effectBadges(cap) {
 
 /* ---------------- navigation ---------------- */
 
-const loaders = { activity: loadActivity, permissions: loadPermissions, services: loadServices, settings: loadSettings };
+const loaders = { you: loadYou, activity: loadActivity, permissions: loadPermissions, services: loadServices, settings: loadSettings };
 document.querySelectorAll(".nav").forEach((btn) =>
   btn.addEventListener("click", () => {
     document.querySelectorAll(".nav").forEach((b) => b.classList.toggle("active", b === btn));
@@ -249,6 +249,61 @@ function onApprovalResolved({ approvalId, approved }) {
   node.classList.add("resolved");
   node.querySelector(".who").textContent = approved ? "✓ You allowed this" : "✕ You declined this";
 }
+
+/* ---------------- You ---------------- */
+
+const PROFILE_FIELDS = ["name", "city", "address", "language", "about"];
+let previewCloud = true;
+
+async function loadYou() {
+  const { profile, memories } = await uab.call("context.get");
+  for (const f of PROFILE_FIELDS) $(`#p-${f}`).value = profile[f] ?? "";
+  $("#memories").replaceChildren(
+    ...(memories.length
+      ? memories
+          .slice()
+          .reverse()
+          .map((m) =>
+            el(
+              "div",
+              { class: "service" },
+              el("div", {}, el("div", { class: "name" }, m.text), el("div", { class: "sub" }, `${m.source === "ai" ? "Suggested by the AI, approved by you" : "Added by you"} · ${timeAgo(m.createdAt)}`)),
+              el("div", { class: "service-actions" }, el("button", { class: "ghost small", onclick: async () => (await uab.call("context.removeMemory", m.id), loadYou()) }, "Forget")),
+            ),
+          )
+      : [el("p", { class: "hint" }, "Nothing yet.")]),
+  );
+  const { text } = await uab.call("context.preview", previewCloud);
+  $("#context-preview").textContent = text || "Nothing yet. Fill in About you or add something to remember.";
+}
+$("#p-save").addEventListener("click", async () => {
+  const profile = Object.fromEntries(PROFILE_FIELDS.map((f) => [f, $(`#p-${f}`).value]));
+  try {
+    await uab.call("context.setProfile", profile);
+    $("#p-status").className = "hint ok";
+    $("#p-status").textContent = "Saved.";
+    setTimeout(() => ($("#p-status").textContent = ""), 1500);
+    loadYou();
+  } catch (err) {
+    $("#p-status").className = "hint bad";
+    $("#p-status").textContent = cleanError(err);
+  }
+});
+$("#memory-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = $("#memory-text").value.trim();
+  if (!text) return;
+  await uab.call("context.addMemory", text);
+  $("#memory-text").value = "";
+  loadYou();
+});
+document.querySelectorAll("#preview-mode button").forEach((b) =>
+  b.addEventListener("click", () => {
+    previewCloud = b.dataset.cloud === "1";
+    document.querySelectorAll("#preview-mode button").forEach((x) => x.classList.toggle("on", x === b));
+    loadYou();
+  }),
+);
 
 /* ---------------- Activity ---------------- */
 
@@ -689,6 +744,7 @@ uab.on((channel, payload) => {
   else if (channel === "approval.requested") showApproval(payload);
   else if (channel === "approval.resolved") onApprovalResolved(payload);
   else if (channel === "audit.appended" && $("#view-activity").classList.contains("active")) loadActivity();
+  else if (channel === "audit.appended" && $("#view-you").classList.contains("active")) loadYou();
   else if (channel === "services.changed") (rememberServices(payload), loadServices(payload), loadSuggestions(payload));
   else if (channel === "chatgpt.changed" && settings?.cloud.kind === "chatgpt") loadChatGPT();
   else if (channel === "browser.state") onBrowserState(payload);
