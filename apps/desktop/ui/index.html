@@ -229,6 +229,8 @@
         <label class="check"><input type="checkbox" id="agents-toggle" /> Let other AI apps use Neural</label>
         <div id="agents-box" class="hidden">
           <p class="hint" id="agents-status"></p>
+          <label class="check"><input type="checkbox" id="agents-confirm" /> Let these apps ask me to approve in their own chat</label>
+          <p class="hint">Claude shows Neural's approval card right in your conversation (on your Mac or phone). The card also stays here, and whichever you answer first counts. Anything that spends money is always approved in Neural itself.</p>
           <p class="hint">Add this to the other app's MCP settings (for Claude Desktop: Settings → Developer → Edit Config), then restart that app. It contains a pairing key: only apps with it can connect.</p>
           <pre class="example" id="agents-config"></pre>
           <div class="row"><button class="primary" id="agents-copy">Copy setup</button><button class="ghost" id="agents-rotate">New pairing key</button><span class="hint" id="agents-note"></span></div>

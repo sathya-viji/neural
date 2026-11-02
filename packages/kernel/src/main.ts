@@ -80,6 +80,7 @@ const handlers: Handlers = {
   "phone.rotate": async () => (await phone.token(true), phone.status()),
   "agents.status": () => agents.status(),
   "agents.enable": async ({ on }) => (await agents.setEnabled(!!on), agents.status()),
+  "agents.confirmInApp": async ({ on }) => (agents.setConfirmInApp(!!on), agents.status()),
   // The pairing key is meant to be shown to the user, who pastes it into the other app's config.
   "agents.token": async ({ rotate }) => ({ token: await agents.token(!!rotate) }),
   "vault.list": async () => {

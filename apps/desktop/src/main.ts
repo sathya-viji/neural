@@ -289,6 +289,7 @@ function registerIpc(): void {
   handle("phone.rotate", async () => withQr(await kernel.call("phone.rotate", {})));
   handle("agents.status", () => kernel.call("agents.status", {}));
   handle("agents.enable", (on: boolean) => kernel.call("agents.enable", { on: !!on }));
+  handle("agents.confirmInApp", (on: boolean) => kernel.call("agents.confirmInApp", { on: !!on }));
   // The setup another app needs: run the bridge with Neural's own runtime, plus the pairing key.
   handle("agents.setup", async (rotate?: boolean) => {
     const { token } = await kernel.call("agents.token", { rotate: !!rotate });

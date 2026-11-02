@@ -18,7 +18,7 @@
     "clean": "rm -rf packages/*/dist apps/*/dist packages/*/tsconfig.tsbuildinfo apps/*/tsconfig.tsbuildinfo",
     "start": "npm run build && npm --workspace @uab/desktop run start",
     "cli": "npm run build && node packages/cli/dist/main.js",
-    "test": "npm run build && node --test \"tests/*.test.mjs\"",
+    "test": "npm run build && node --test --test-force-exit --test-timeout=120000 \"tests/*.test.mjs\"",
     "package": "npm run build && node scripts/package.mjs"
   },
   "devDependencies": {

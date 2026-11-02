@@ -722,6 +722,7 @@ async function loadAgents() {
   $("#agents-toggle").checked = s.enabled;
   $("#agents-box").classList.toggle("hidden", !s.enabled);
   if (!s.enabled) return;
+  $("#agents-confirm").checked = s.confirmInApp;
   $("#agents-status").textContent = !s.listening ? "Couldn't open the connection. Try turning it off and on." : s.connected.length ? `Connected now: ${s.connected.join(", ")}` : "Ready. No app connected right now.";
   // The key is shown masked; Copy setup puts the full config on the clipboard.
   const { config } = await uab.call("agents.setup");
@@ -737,6 +738,9 @@ $("#agents-toggle").addEventListener("change", async (e) => {
     return;
   }
   loadAgents();
+});
+$("#agents-confirm").addEventListener("change", async (e) => {
+  await uab.call("agents.confirmInApp", e.target.checked);
 });
 $("#agents-copy").addEventListener("click", async () => {
   await uab.call("agents.copy");

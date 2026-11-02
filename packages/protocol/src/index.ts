@@ -217,6 +217,15 @@ export interface ConversationSummary {
   turnCount: number;
 }
 
+export interface AgentStatus {
+  enabled: boolean;
+  listening: boolean;
+  socket: string;
+  connected: string[];
+  /** Apps may show approval cards in their own chat (except payments). */
+  confirmInApp: boolean;
+}
+
 export interface Identity {
   userId: string;
   displayName: string;
@@ -244,8 +253,9 @@ export interface KernelMethods {
   "phone.status": { params: {}; result: { enabled: boolean; listening: boolean; url: string | null; lastSeen: string | null } };
   "phone.enable": { params: { on: boolean }; result: { enabled: boolean; listening: boolean; url: string | null; lastSeen: string | null } };
   "phone.rotate": { params: {}; result: { enabled: boolean; listening: boolean; url: string | null; lastSeen: string | null } };
-  "agents.status": { params: {}; result: { enabled: boolean; listening: boolean; socket: string; connected: string[] } };
-  "agents.enable": { params: { on: boolean }; result: { enabled: boolean; listening: boolean; socket: string; connected: string[] } };
+  "agents.status": { params: {}; result: AgentStatus };
+  "agents.enable": { params: { on: boolean }; result: AgentStatus };
+  "agents.confirmInApp": { params: { on: boolean }; result: AgentStatus };
   "agents.token": { params: { rotate?: boolean }; result: { token: string } };
   "vault.list": { params: {}; result: { name: string; label: string }[] };
   "vault.remove": { params: { name: string }; result: {} };
