@@ -428,6 +428,14 @@ document.querySelectorAll("#preview-mode button").forEach((b) =>
 
 /* ---------------- Activity ---------------- */
 
+/** An answer as one plain line: no visual blocks, code or Markdown marks. */
+const plainSummary = (text) =>
+  String(text)
+    .replace(/```[\s\S]*?(```|$)/g, " ")
+    .replace(/\*\*|__|`/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
 /** Show one request's step-by-step record in Activity. */
 async function openActivity(taskId) {
   showView("activity");
@@ -463,7 +471,7 @@ async function loadActivity() {
         "div",
         { class: "task", id: `task-${t.taskId}` },
         el("div", { class: "task-head" }, el("div", { class: "task-intent" }, t.intent), el("div", { class: "task-time" }, timeAgo(t.startedAt))),
-        t.summary ? el("div", { class: "task-summary" }, t.summary.replace(/\*\*/g, "")) : null,
+        t.summary ? el("div", { class: "task-summary" }, plainSummary(t.summary)) : null,
         ...rows.map((e) =>
           el(
             "div",
@@ -668,6 +676,8 @@ async function loadSettings() {
   $("#cloud-key").placeholder = has.present ? "•••••••• saved in Keychain (type to replace)" : "Paste your API key";
   checkLocal();
   loadVault();
+  $("#update-toggle").checked = updatesOn();
+  if (updatesOn()) checkUpdates(true);
   if (settings.cloud.kind === "chatgpt") loadChatGPT();
   else if (has.present) checkCloud();
   else setCloudStatus("", "No API key yet.");
@@ -884,6 +894,33 @@ uab.on((channel, payload) => {
   else if (channel === "conversations.changed") (currentConversation = payload.currentId), loadConversations();
 });
 
+/* ---------------- New versions ---------------- */
+
+const updatesOn = () => {
+  try {
+    return localStorage.getItem("neural.updates") !== "off";
+  } catch {
+    return true;
+  }
+};
+async function checkUpdates(manual = false) {
+  if (!manual && !updatesOn()) return;
+  const r = await uab.call("update.check").catch(() => null);
+  const notice = $("#update-notice");
+  notice.classList.toggle("hidden", !r?.latest);
+  if (r?.latest) notice.replaceChildren(el("strong", {}, `Neural ${r.latest} is available`), el("span", {}, "Download the new version"));
+  $("#update-status").textContent = r ? (r.latest ? `Version ${r.latest} is available (you have ${r.current}).` : `You have the latest version (${r.current}).`) : "Couldn't check right now.";
+}
+$("#update-notice").addEventListener("click", () => uab.call("update.open"));
+$("#update-toggle").addEventListener("change", (e) => {
+  try {
+    localStorage.setItem("neural.updates", e.target.checked ? "on" : "off");
+  } catch {}
+  if (e.target.checked) checkUpdates(true);
+  else $("#update-notice").classList.add("hidden");
+});
+setInterval(checkUpdates, 12 * 3600 * 1000);
+
 /* ---------------- First-launch welcome ---------------- */
 
 const welcome = $("#welcome");
@@ -966,4 +1003,5 @@ $("#w-folders").addEventListener("click", async () => {
   for (const req of await uab.call("approvals.pending")) showApproval(req);
   input.focus();
   maybeWelcome();
+  checkUpdates();
 })();

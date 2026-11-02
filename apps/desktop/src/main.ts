@@ -4,7 +4,7 @@
  *   - the gateway, which talks to the chosen model and sends proposals to the kernel
  *   - the window, which shows results and the kernel's approval requests
  */
-import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Menu, MenuItem } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve, sep } from "node:path";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -182,6 +182,32 @@ async function listCloudModels(cloud: ModelSettings["cloud"]): Promise<{ ok: boo
   }
 }
 
+/* ---------------- New versions ---------------- */
+
+const RELEASES = "https://api.github.com/repos/sathya-viji/neural/releases?per_page=10";
+const versionParts = (v: string) => v.replace(/^v/, "").split("-")[0].split(".").map((n) => Number(n) || 0);
+const isNewer = (a: string, b: string) => {
+  const [x, y] = [versionParts(a), versionParts(b)];
+  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
+  return false;
+};
+
+/**
+ * Is there a newer release on GitHub? This alpha isn't signed, so macOS won't
+ * let it replace itself: the app shows a notice and the user downloads it.
+ * Only GitHub's public release list is fetched; nothing about the user is sent.
+ */
+async function checkForUpdate(): Promise<{ current: string; latest?: string; url?: string }> {
+  const current = app.getVersion();
+  const res = await fetch(RELEASES, { headers: { accept: "application/vnd.github+json", "user-agent": `Neural/${current}` }, signal: AbortSignal.timeout(8000) });
+  if (!res.ok) return { current };
+  const releases = (await res.json()) as { tag_name: string; html_url: string; draft: boolean }[];
+  const latest = releases.filter((r) => !r.draft).sort((a, b) => (isNewer(a.tag_name, b.tag_name) ? -1 : 1))[0];
+  if (!latest || !isNewer(latest.tag_name, current)) return { current };
+  if (!latest.html_url.startsWith("https://github.com/sathya-viji/neural/")) return { current };
+  return { current, latest: latest.tag_name.replace(/^v/, ""), url: latest.html_url };
+}
+
 /* ---------------- IPC: the only things the window can ask for ---------------- */
 
 function insideHome(path: string): string {
@@ -263,6 +289,12 @@ function registerIpc(): void {
   handle("context.removeMemory", (id: string) => kernel.call("context.removeMemory", { id: String(id) }));
   handle("context.preview", (cloud: boolean) => kernel.call("context.build", { intent: "", cloud: !!cloud }));
   handle("vault.remove", (name: string) => kernel.call("vault.remove", { name: String(name) }));
+  handle("update.check", () => checkForUpdate().catch(() => ({ current: app.getVersion() })));
+  handle("update.open", async () => {
+    const { url } = await checkForUpdate();
+    if (url) await shell.openExternal(url);
+    return {};
+  });
   handle("services.edit", () => shell.openPath(join(kernelHome, "services.json")));
 
   handle("gmail.status", () => kernel.call("gmail.status", {}));
@@ -417,4 +449,22 @@ app.whenReady().then(async () => {
   }
   registerIpc();
   createWindow();
+  addCaptureMenu();
 });
+
+/**
+ * For README screenshots: with UAB_CAPTURE_DIR set (development only), a Capture
+ * menu saves the window as a PNG there. Absent from normal runs and the packaged app.
+ */
+function addCaptureMenu(): void {
+  const dir = process.env.UAB_CAPTURE_DIR;
+  const menu = Menu.getApplicationMenu();
+  if (!dir || app.isPackaged || !menu) return;
+  let n = 0;
+  const capture = async () => {
+    const image = await win?.webContents.capturePage();
+    if (image) writeFileSync(join(dir, `shot-${String(++n).padStart(2, "0")}.png`), image.toPNG());
+  };
+  menu.append(new MenuItem({ label: "Capture", submenu: [{ label: "Save window as PNG", accelerator: "CmdOrCtrl+Shift+9", click: () => void capture() }] }));
+  Menu.setApplicationMenu(menu);
+}

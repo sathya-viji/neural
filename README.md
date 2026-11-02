@@ -23,6 +23,12 @@ Ask in your own words. Neural works out the steps and uses the services you've c
 
 Answers come back as readable documents: tables, option cards, forecasts, timelines and follow-up buttons, not a wall of chat.
 
+<p align="center"><img src="docs/screenshots/answers.png" width="820" alt="Neural showing a five-day forecast as day cards and three weekend trips as option cards" /></p>
+
+| Anything important waits for you | Every action is on record |
+|---|---|
+| <img src="docs/screenshots/approval.png" alt="An approval card written by the kernel: add a reminder for Friday 6 PM, with Allow and Decline" /> | <img src="docs/screenshots/activity.png" alt="The Activity screen listing each request with what ran and who allowed it" /> |
+
 ## Why it's different
 
 | | Typical AI assistant | Neural |
@@ -41,6 +47,7 @@ Answers come back as readable documents: tables, option cards, forecasts, timeli
 2. Open it and drag **Neural** to Applications.
 3. The alpha isn't signed with an Apple Developer ID yet, so the first time, **right-click Neural → Open → Open**. (Or: System Settings → Privacy & Security → *Open Anyway*.)
 4. A short welcome lets you pick the AI, tell it your name and city (optional), and share some folders.
+5. **Updates:** this alpha can't update itself (it isn't signed), so Neural shows a notice in the sidebar when a new version is out. Download it and drag it into Applications again. You can turn the check off in Settings.
 
 ### Choosing the AI
 

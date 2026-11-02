@@ -93,7 +93,7 @@ export class ContextStore {
     const since = Date.now() - 36 * 3600 * 1000;
     const recent = (opts.recent ?? []).filter((t) => t.summary && new Date(t.startedAt).getTime() > since).slice(0, 3);
     if (recent.length) {
-      lines.push("", "Recently done (newest first):", ...recent.map((t) => `- "${t.intent.slice(0, 120)}" → ${t.summary!.replace(/\*\*/g, "").replace(/\s+/g, " ").slice(0, 160)}${t.summary!.length > 160 ? "…" : ""}`));
+      lines.push("", "Recently done (newest first):", ...recent.map((t) => `- "${t.intent.slice(0, 120)}" → ${plain(t.summary!).slice(0, 160)}${plain(t.summary!).length > 160 ? "…" : ""}`));
     }
     return lines.join("\n").trim();
   }
@@ -158,6 +158,11 @@ const RELATED: Record<string, string[]> = {
   communication: ["communication", "work", "family"],
   home: ["home", "money"],
 };
+
+/** An answer as plain text: no visual blocks or Markdown marks. */
+function plain(text: string): string {
+  return text.replace(/```[\s\S]*?(```|$)/g, " ").replace(/\*\*|`/g, "").replace(/\s+/g, " ").trim();
+}
 
 function words(text: string): Set<string> {
   return new Set(text.toLowerCase().match(WORD) ?? []);

@@ -27,6 +27,7 @@
         <div class="recent-head">Recent conversations</div>
         <div id="conv-list"></div>
       </div>
+      <button class="update-notice hidden" id="update-notice"></button>
       <div class="sidebar-foot">
         <div class="kernel-status"><span class="dot ok"></span> Kernel running</div>
         <div class="model-status" id="model-label">—</div>
@@ -215,6 +216,10 @@
         <h2>Your data</h2>
         <p class="lede">Settings, permissions, the activity history and the outbox are kept on this computer in <code id="home-path"></code>. There is no telemetry.</p>
         <button class="ghost" id="open-home">Open data folder</button>
+
+        <h2>Updates</h2>
+        <label class="check"><input type="checkbox" id="update-toggle" /> Tell me when a new version of Neural is out</label>
+        <p class="hint">Checks the public list of releases on GitHub about twice a day. Nothing about you is sent. <span id="update-status"></span></p>
       </section>
     </main>
 
