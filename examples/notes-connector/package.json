@@ -1,0 +1,10 @@
+{
+  "name": "notes-connector",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Example connector for Neural: a tiny notes service built with @uab/connector-kit.",
+  "type": "module",
+  "bin": { "notes-connector": "index.mjs" },
+  "dependencies": { "@uab/connector-kit": "0.1.0" },
+  "license": "Apache-2.0"
+}

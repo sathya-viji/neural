@@ -4,7 +4,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { McpSignIn } from "./mcp-signin.js";
-import type { ActionResult, Capability, Effect, Risk, ServiceInfo } from "@uab/protocol";
+import { CONNECTOR_META, EFFECTS, MIN_RISK, type ActionResult, type Capability, type Effect, type Risk, type ServiceInfo } from "@uab/protocol";
 import type { BuiltinCapability, ProviderContext } from "./builtin/types.js";
 import { fileCapabilities } from "./builtin/files.js";
 import { contactCapabilities } from "./builtin/contacts.js";
@@ -58,7 +58,7 @@ interface McpService {
   client?: Client;
   signIn?: McpSignIn;
   url?: string;
-  capabilities: (Capability & { toolName: string })[];
+  capabilities: (Capability & { toolName: string; summaryTemplate?: string })[];
 }
 
 /**
@@ -132,8 +132,11 @@ export class ServiceHub {
       const { tools } = await client.listTools();
       service.client = client;
       service.capabilities = tools.map((t) => {
+        // Your own setting wins; then what the connector declares; then MCP's hints.
         const override = def.classify?.[t.name];
-        const { effects, risk } = override ?? classifyMcpTool(t.annotations);
+        const declared = declaredLabels(t._meta);
+        const { effects, risk } = override ?? declared ?? classifyMcpTool(t.annotations);
+        const template = t._meta?.[CONNECTOR_META.summary];
         return {
           id: `mcp.${id}.${t.name}`,
           service: `mcp.${id}`,
@@ -143,6 +146,7 @@ export class ServiceHub {
           effects,
           risk,
           toolName: t.name,
+          summaryTemplate: typeof template === "string" ? template.slice(0, 200) : undefined,
         };
       });
       service.info = { ...service.info, status: "connected", signedIn: service.signIn ? true : undefined, capabilityCount: service.capabilities.length };
@@ -290,6 +294,9 @@ export class ServiceHub {
     }
     const cap = this.get(id);
     const service = this.services().find((x) => x.id === cap?.service);
+    // A connector's card template, filled by the kernel from the real arguments.
+    const template = [...this.mcp.values()].flatMap((s) => s.capabilities).find((c) => c.id === id)?.summaryTemplate;
+    if (template && service) return `${service.title}: ${fillTemplate(template, args)}`;
     const shown = describeArgs(args);
     const title = cap?.title ?? id;
     return `${service && cap?.service.startsWith("mcp.") ? `${service.title}: ` : ""}${title}${shown ? ` — ${shown}` : ""}`;
@@ -322,6 +329,33 @@ export class ServiceHub {
  * MCP annotations are hints from the server. Unless the server says a tool
  * only reads, assume it changes things and ask the user first.
  */
+/**
+ * What a connector says a tool does (see CONNECTOR_META). Unknown effects are
+ * ignored, and the risk is never lower than the effects imply: a connector can't
+ * label sending or paying as low risk.
+ */
+export function declaredLabels(meta: Record<string, unknown> | undefined): { effects: Effect[]; risk: Risk } | null {
+  const raw = meta?.[CONNECTOR_META.effects];
+  if (!Array.isArray(raw)) return null;
+  const effects = [...new Set(raw.filter((e): e is Effect => EFFECTS.includes(e as Effect)))];
+  if (!effects.length) return null;
+  const order: Risk[] = ["low", "medium", "high"];
+  const declaredRisk = order.includes(meta?.[CONNECTOR_META.risk] as Risk) ? (meta![CONNECTOR_META.risk] as Risk) : "low";
+  const floor = effects.map((e) => MIN_RISK[e]).reduce((a, b) => (order.indexOf(b) > order.indexOf(a) ? b : a), "low" as Risk);
+  return { effects, risk: order.indexOf(declaredRisk) >= order.indexOf(floor) ? declaredRisk : floor };
+}
+
+/** "Order {qty} × {item}" with the real arguments. Missing values show as "?". */
+export function fillTemplate(template: string, args: Record<string, unknown>): string {
+  const show = (v: unknown): string => {
+    if (v === undefined || v === null || v === "") return "?";
+    if (Array.isArray(v)) return v.every((x) => typeof x !== "object") ? v.join(", ") : `${v.length} ${v.length === 1 ? "item" : "items"}`;
+    if (typeof v === "object") return describeArgs(v as Record<string, unknown>) || "?";
+    return String(v).slice(0, 120);
+  };
+  return template.replace(/\{([\w.]+)\}/g, (_, key: string) => show(key.split(".").reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], args))).slice(0, 300);
+}
+
 function classifyMcpTool(a?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }): {
   effects: Effect[];
   risk: Risk;

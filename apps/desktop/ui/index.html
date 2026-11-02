@@ -209,6 +209,16 @@
         </div>
         <button class="primary" id="save-settings">Save</button>
 
+        <h2>Other AI apps</h2>
+        <p class="lede">Let apps like Claude Desktop, ChatGPT or Cursor act through Neural. They get the same services, but every action follows your permissions here, anything important asks <b>you</b> in Neural (naming the app), and it's all in Activity.</p>
+        <label class="check"><input type="checkbox" id="agents-toggle" /> Let other AI apps use Neural</label>
+        <div id="agents-box" class="hidden">
+          <p class="hint" id="agents-status"></p>
+          <p class="hint">Add this to the other app's MCP settings (for Claude Desktop: Settings → Developer → Edit Config), then restart that app. It contains a pairing key: only apps with it can connect.</p>
+          <pre class="example" id="agents-config"></pre>
+          <div class="row"><button class="primary" id="agents-copy">Copy setup</button><button class="ghost" id="agents-rotate">New pairing key</button><span class="hint" id="agents-note"></span></div>
+        </div>
+
         <h2>Saved sign-ins and keys</h2>
         <p class="lede">Kept in your Mac's Keychain by the kernel. The AI and this window never see them. Removing one signs you out of it.</p>
         <div id="vault-list" class="stack"></div>

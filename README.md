@@ -66,6 +66,23 @@ Built in: Files (only folders you share), Apple Mail, Contacts, Calendar, Remind
 - **Gmail**: one-time setup, see [docs/gmail-setup.md](docs/gmail-setup.md).
 - **Any MCP service**: Services → *Add a service*, then paste its address. Services that need an account show a **Sign in** button (standard MCP sign-in). For example Zomato's is `https://mcp-server.zomato.com/mcp` (Zomato currently allows personal and testing use).
 
+## Use Neural from Claude Desktop, ChatGPT and other AI apps
+
+Turn on **Settings → Other AI apps**, copy the setup into the other app's MCP config, and it can use your connected services *through* Neural. Your permissions apply, anything important asks you in Neural (naming the app), and it's all in Activity. See [docs/use-from-other-ai-apps.md](docs/use-from-other-ai-apps.md).
+
+## Build a connector
+
+A connector is an MCP server whose tools say what they do (read, write, send, spend, delete), so the kernel knows when to ask and what to put on the approval card. With `@uab/connector-kit` it's one file:
+
+```js
+defineConnector({ name: "corner-shop", version: "1.0.0", tools: [
+  { name: "place_order", title: "Place an order", effects: ["spend", "send"],
+    summary: "Order {items} for {total}", input: { … }, async run(args) { … } },
+]}).serveStdio();
+```
+
+Check it with `npx uab-check -- node my-connector.js`. Guide: [docs/build-a-connector.md](docs/build-a-connector.md) · example: [examples/notes-connector](examples/notes-connector/index.mjs).
+
 ## How it works
 
 ```
@@ -102,9 +119,11 @@ packages/
   protocol/   The shared contract: capabilities, proposals, decisions, audit records, kernel RPC
   kernel/     The trusted kernel: policy, approvals, vault, context and memory, MCP host, audit
   gateway/    The intelligence layer: model providers turn requests into proposals
-  cli/        A command-line host: uab "…"
+  connector-kit/  Build and check connectors: defineConnector(), uab-check
+  cli/        A command-line host (uab "…") and the uab-mcp bridge for other AI apps
 apps/
   desktop/    Neural, the Electron app
+examples/     A sample connector (notes)
 tests/        End-to-end tests
 ```
 
@@ -115,8 +134,8 @@ tests/        End-to-end tests
 - [x] MCP host: local and online services with sign-in
 - [x] Context and memory you control, with on-device relevance picking for cloud models
 - [x] Desktop app with document-style answers and visual blocks
-- [ ] Provider SDK and conformance tests, so anyone can build a connector
-- [ ] The kernel as an MCP server, so other AI apps can act through it
+- [x] Connector kit and a connector check, so anyone can build a connector
+- [x] Other AI apps can act through the kernel (via MCP), with the same permissions and approvals
 - [ ] Voice input
 - [ ] Linux and Windows
 - [ ] Android and cross-device continuity (Generation 2)

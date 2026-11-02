@@ -30,6 +30,7 @@ const bundle = (entry, out) =>
   });
 await bundle("apps/desktop/dist/main.js", "dist/main.js");
 await bundle("packages/kernel/dist/main.js", "dist/kernel.js");
+await bundle("packages/cli/dist/mcp.js", "dist/uab-mcp.js");
 
 const copy = (from, to) => {
   if (!existsSync(join(root, from))) throw new Error(`Missing ${from}. Run npm run build first.`);

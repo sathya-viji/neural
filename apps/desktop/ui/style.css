@@ -401,3 +401,4 @@ button.small { padding: 4px 10px; font-size: 12.5px; }
 .update-notice { display: grid; gap: 2px; text-align: left; margin: 8px 0 0; padding: 10px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); color: var(--text); cursor: pointer; font-size: 12.5px; }
 .update-notice span { color: var(--accent); }
 label.check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 13.5px; }
+#agents-config { white-space: pre; overflow-x: auto; max-width: 720px; font-size: 12px; }

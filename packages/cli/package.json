@@ -3,11 +3,15 @@
   "version": "0.1.0",
   "description": "Command-line host for Unified AI Base.",
   "type": "module",
-  "bin": { "uab": "dist/main.js" },
+  "bin": {
+    "uab": "dist/main.js",
+    "uab-mcp": "dist/mcp.js"
+  },
   "dependencies": {
     "@uab/gateway": "0.1.0",
     "@uab/kernel": "0.1.0",
-    "@uab/protocol": "0.1.0"
+    "@uab/protocol": "0.1.0",
+    "@modelcontextprotocol/sdk": "^1.32.2"
   },
   "license": "Apache-2.0"
 }

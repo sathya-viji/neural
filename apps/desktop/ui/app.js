@@ -334,6 +334,8 @@ const approvalNodes = new Map();
 
 function showApproval(req) {
   if (approvalNodes.has(req.approvalId)) return;
+  // Requests from other AI apps can come at any time: bring the Ask screen forward.
+  if (req.source === "agent") showView("ask");
   const cap = req.capability;
   const node = el(
     "div",
@@ -676,12 +678,46 @@ async function loadSettings() {
   $("#cloud-key").placeholder = has.present ? "•••••••• saved in Keychain (type to replace)" : "Paste your API key";
   checkLocal();
   loadVault();
+  loadAgents();
   $("#update-toggle").checked = updatesOn();
   if (updatesOn()) checkUpdates(true);
   if (settings.cloud.kind === "chatgpt") loadChatGPT();
   else if (has.present) checkCloud();
   else setCloudStatus("", "No API key yet.");
 }
+
+/** Other AI apps acting through Neural. */
+async function loadAgents() {
+  const s = await uab.call("agents.status");
+  $("#agents-toggle").checked = s.enabled;
+  $("#agents-box").classList.toggle("hidden", !s.enabled);
+  if (!s.enabled) return;
+  $("#agents-status").textContent = !s.listening ? "Couldn't open the connection. Try turning it off and on." : s.connected.length ? `Connected now: ${s.connected.join(", ")}` : "Ready. No app connected right now.";
+  // The key is shown masked; Copy setup puts the full config on the clipboard.
+  const { config } = await uab.call("agents.setup");
+  $("#agents-config").textContent = config.replace(/("NEURAL_PAIRING_KEY": ")([^"]{4})[^"]*/, "$1$2••••••••");
+}
+$("#agents-toggle").addEventListener("change", async (e) => {
+  try {
+    await uab.call("agents.enable", e.target.checked);
+  } catch (err) {
+    e.target.checked = false;
+    $("#agents-box").classList.remove("hidden");
+    $("#agents-status").textContent = `Couldn't turn it on: ${cleanError(err)}`;
+    return;
+  }
+  loadAgents();
+});
+$("#agents-copy").addEventListener("click", async () => {
+  await uab.call("agents.copy");
+  $("#agents-note").textContent = "Copied. Paste it into the other app's MCP config.";
+});
+$("#agents-rotate").addEventListener("click", async () => {
+  if (!confirm("Make a new pairing key? Apps set up with the old one will stop connecting until you paste the new setup.")) return;
+  await uab.call("agents.setup", true);
+  $("#agents-note").textContent = "New key made. Copy the setup again.";
+  loadAgents();
+});
 
 async function loadVault() {
   const items = await uab.call("vault.list");

@@ -1,0 +1,20 @@
+{
+  "name": "@uab/connector-kit",
+  "version": "0.1.0",
+  "description": "Build a connector for Neural / Unified AI Base: an MCP server whose tools say exactly what they do, so the kernel can ask the user at the right moments.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "uab-check": "dist/check.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./check": "./dist/check.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@uab/protocol": "0.1.0"
+  },
+  "license": "Apache-2.0"
+}

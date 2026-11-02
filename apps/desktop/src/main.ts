@@ -4,7 +4,7 @@
  *   - the gateway, which talks to the chosen model and sends proposals to the kernel
  *   - the window, which shows results and the kernel's approval requests
  */
-import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Menu, MenuItem } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, Menu, MenuItem, Notification, clipboard } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve, sep } from "node:path";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -281,6 +281,21 @@ function registerIpc(): void {
   );
   handle("services.remove", (id: string) => kernel.call("services.remove", { id: String(id) }));
   handle("vault.list", () => kernel.call("vault.list", {}));
+  handle("agents.status", () => kernel.call("agents.status", {}));
+  handle("agents.enable", (on: boolean) => kernel.call("agents.enable", { on: !!on }));
+  // The setup another app needs: run the bridge with Neural's own runtime, plus the pairing key.
+  handle("agents.setup", async (rotate?: boolean) => {
+    const { token } = await kernel.call("agents.token", { rotate: !!rotate });
+    const bridge = app.isPackaged ? join(here, "uab-mcp.js") : join(appRoot, "..", "..", "packages", "cli", "dist", "mcp.js");
+    const config = { mcpServers: { neural: { command: process.execPath, args: [bridge], env: { ELECTRON_RUN_AS_NODE: "1", NEURAL_PAIRING_KEY: token, UAB_HOME: kernelHome } } } };
+    return { config: JSON.stringify(config, null, 2) };
+  });
+  handle("agents.copy", async () => {
+    const { token } = await kernel.call("agents.token", {});
+    const bridge = app.isPackaged ? join(here, "uab-mcp.js") : join(appRoot, "..", "..", "packages", "cli", "dist", "mcp.js");
+    clipboard.writeText(JSON.stringify({ mcpServers: { neural: { command: process.execPath, args: [bridge], env: { ELECTRON_RUN_AS_NODE: "1", NEURAL_PAIRING_KEY: token, UAB_HOME: kernelHome } } } }, null, 2));
+    return {};
+  });
   handle("context.get", () => kernel.call("context.get", {}));
   handle("context.setProfile", (profile: Record<string, unknown>) =>
     kernel.call("context.setProfile", { profile: Object.fromEntries(Object.entries(profile ?? {}).map(([k, v]) => [k, String(v ?? "")])) }),
@@ -391,6 +406,13 @@ async function startKernel(): Promise<void> {
   });
   const events: KernelEvent[] = ["approval.requested", "approval.resolved", "audit.appended", "services.changed", "chatgpt.changed"];
   for (const e of events) kernel.on(e, (payload) => send(e, payload));
+  // Another AI app is asking for something that needs your OK: say so, even if Neural is in the background.
+  kernel.on("approval.requested", (req) => {
+    if (req.source !== "agent" || win?.isFocused()) return;
+    const note = new Notification({ title: `${req.model ?? "Another AI app"} needs your OK`, body: req.summary });
+    note.on("click", () => (win?.show(), win?.focus()));
+    note.show();
+  });
   kernel.on("exit", (code) => {
     if (!app.isReady() || quitting) return;
     dialog.showErrorBox("Kernel stopped", `The trusted kernel stopped unexpectedly (code ${code}). Nothing can run until the app restarts.`);

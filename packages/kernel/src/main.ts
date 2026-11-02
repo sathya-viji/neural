@@ -12,6 +12,7 @@ import { gmail } from "./builtin/gmail.js";
 import { chatgpt } from "./chatgpt.js";
 import { ModelKey } from "./model-key.js";
 import { ConversationStore } from "./conversations.js";
+import { AgentAccess } from "./agents.js";
 
 type Handlers = { [M in keyof KernelMethods]: (params: KernelMethods[M]["params"]) => Promise<KernelMethods[M]["result"]> | KernelMethods[M]["result"] };
 
@@ -26,6 +27,7 @@ for (const event of events) kernel.on(event, (params) => send({ jsonrpc: "2.0", 
 
 const modelKey = new ModelKey(kernel.vault);
 const conversations = new ConversationStore(kernel.home);
+const agents = new AgentAccess(kernel);
 
 const handlers: Handlers = {
   "kernel.hello": () => ({ version: KERNEL_VERSION, identity: kernel.identity, home: kernel.home }),
@@ -71,12 +73,17 @@ const handlers: Handlers = {
   "conversations.get": ({ id }) => conversations.get(id),
   "conversations.appendTurn": ({ id, turn, history }) => conversations.appendTurn(id, turn, history),
   "conversations.delete": ({ id }) => (conversations.delete(id), {}),
+  "agents.status": () => agents.status(),
+  "agents.enable": async ({ on }) => (await agents.setEnabled(!!on), agents.status()),
+  // The pairing key is meant to be shown to the user, who pastes it into the other app's config.
+  "agents.token": async ({ rotate }) => ({ token: await agents.token(!!rotate) }),
   "vault.list": async () => {
     const entries = [
       { name: "model.cloud", label: "Cloud model API key (Gemini, Claude or other)" },
       { name: "chatgpt.account", label: "ChatGPT sign-in" },
       { name: "gmail.token", label: "Gmail sign-in" },
       { name: "gmail.client", label: "Gmail app registration (OAuth client)" },
+      { name: "agents.token", label: "Pairing key for other AI apps" },
       ...kernel.hub.vaultEntries(),
     ];
     const present = new Set(await kernel.vault.present(entries.map((e) => e.name)));
@@ -124,6 +131,7 @@ async function handle(req: RpcRequest): Promise<void> {
 }
 
 await kernel.start();
+await agents.start().catch((err) => process.stderr.write(`[kernel] agent access: ${(err as Error).message}\n`));
 await chatgpt.init(kernel.vault);
 process.stderr.write(`[kernel] ready (home ${kernel.home})\n`);
 

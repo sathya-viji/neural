@@ -17,6 +17,21 @@ export type JsonSchema = {
 };
 
 /** What a capability does to the world. Drives default policy. */
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
+
+/**
+ * Where other AI apps reach the kernel (see uab-mcp). In the data folder, unless
+ * that path is too long for a socket (macOS allows about 104 bytes); then a short
+ * path in this user's private temp folder, derived from the data folder.
+ */
+export function agentSocketPath(home: string): string {
+  const inHome = join(home, "agent.sock");
+  if (Buffer.byteLength(inHome) < 100) return inHome;
+  return join(tmpdir(), `uab-agent-${createHash("sha256").update(home).digest("hex").slice(0, 12)}.sock`);
+}
+
 export type Effect =
   | "read" // looks at data, changes nothing
   | "write" // creates or changes the user's own data
@@ -26,6 +41,25 @@ export type Effect =
   | "device"; // acts on a physical device or the local system
 
 export type Risk = "low" | "medium" | "high";
+
+export const EFFECTS: readonly Effect[] = ["read", "write", "send", "spend", "delete", "device"];
+
+/**
+ * Labels a connector (MCP server) can put in a tool's _meta so the kernel knows
+ * exactly what the tool does, instead of guessing from MCP's hints:
+ *   "ai.unifiedaibase/effects": ["send", "spend"]
+ *   "ai.unifiedaibase/risk": "high"
+ *   "ai.unifiedaibase/summary": "Order {quantity} × {item} from {restaurant}"
+ * The summary is a template for the approval card; the kernel fills it from the real arguments.
+ */
+export const CONNECTOR_META = {
+  effects: "ai.unifiedaibase/effects",
+  risk: "ai.unifiedaibase/risk",
+  summary: "ai.unifiedaibase/summary",
+} as const;
+
+/** The least risk an effect can carry, whatever a connector declares. */
+export const MIN_RISK: Record<Effect, Risk> = { read: "low", device: "low", write: "medium", delete: "medium", send: "medium", spend: "high" };
 
 /** A single thing the system can do, offered by a service or device. */
 export interface Capability {
@@ -207,6 +241,9 @@ export interface KernelMethods {
   "conversations.get": { params: { id: string }; result: Conversation };
   "conversations.appendTurn": { params: { id?: string; turn: ConversationTurn; history: unknown[] }; result: { id: string } };
   "conversations.delete": { params: { id: string }; result: {} };
+  "agents.status": { params: {}; result: { enabled: boolean; listening: boolean; socket: string; connected: string[] } };
+  "agents.enable": { params: { on: boolean }; result: { enabled: boolean; listening: boolean; socket: string; connected: string[] } };
+  "agents.token": { params: { rotate?: boolean }; result: { token: string } };
   "vault.list": { params: {}; result: { name: string; label: string }[] };
   "vault.remove": { params: { name: string }; result: {} };
   "services.add": { params: { name: string; url?: string; command?: string }; result: { id: string } };

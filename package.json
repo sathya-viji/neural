@@ -1,6 +1,6 @@
 {
   "name": "unified-ai-base",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "Open, model-independent foundation for intention-centric computing. AI proposes. The kernel authorises.",
   "type": "module",
@@ -9,10 +9,12 @@
     "packages/kernel",
     "packages/gateway",
     "packages/cli",
-    "apps/desktop"
+    "packages/connector-kit",
+    "apps/desktop",
+    "examples/*"
   ],
   "scripts": {
-    "build": "node scripts/build-native.mjs && node scripts/fetch-model.mjs && tsc -b packages/protocol packages/kernel packages/gateway packages/cli apps/desktop",
+    "build": "node scripts/build-native.mjs && node scripts/fetch-model.mjs && tsc -b packages/protocol packages/kernel packages/gateway packages/connector-kit packages/cli apps/desktop",
     "clean": "rm -rf packages/*/dist apps/*/dist packages/*/tsconfig.tsbuildinfo apps/*/tsconfig.tsbuildinfo",
     "start": "npm run build && npm --workspace @uab/desktop run start",
     "cli": "npm run build && node packages/cli/dist/main.js",
