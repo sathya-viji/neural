@@ -209,6 +209,21 @@
         </div>
         <button class="primary" id="save-settings">Save</button>
 
+        <h2>Approve from your phone</h2>
+        <p class="lede">When something needs your OK (from Neural, or from Claude on your phone), answer it on your phone. Works when your phone is on the same Wi-Fi as this Mac.</p>
+        <label class="check"><input type="checkbox" id="phone-toggle" /> Let me approve from my phone</label>
+        <div id="phone-box" class="hidden">
+          <div class="phone-pair">
+            <img id="phone-qr" alt="QR code to open Neural approvals on your phone" />
+            <div>
+              <p><b>Scan with your phone's camera.</b> Then in Safari: Share → <b>Add to Home Screen</b>, so it opens like an app.</p>
+              <p class="hint" id="phone-status"></p>
+              <p class="hint">The QR code contains a pairing key; anyone on your Wi-Fi with it could answer your approvals. Don't share it. If your Mac asks whether Neural may accept incoming connections, choose <b>Allow</b>.</p>
+              <div class="row"><button class="ghost small" id="phone-rotate">New pairing key</button></div>
+            </div>
+          </div>
+        </div>
+
         <h2>Other AI apps</h2>
         <p class="lede">Let apps like Claude Desktop, ChatGPT or Cursor act through Neural. They get the same services, but every action follows your permissions here, anything important asks <b>you</b> in Neural (naming the app), and it's all in Activity.</p>
         <label class="check"><input type="checkbox" id="agents-toggle" /> Let other AI apps use Neural</label>

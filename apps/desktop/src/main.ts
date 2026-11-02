@@ -28,6 +28,7 @@ import {
 } from "@uab/gateway";
 import type { ConversationTurn, KernelEvent, Permission } from "@uab/protocol";
 import { MiniBrowser, refersToPage } from "./browser.js";
+import QRCode from "qrcode";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = join(here, "..");
@@ -281,6 +282,11 @@ function registerIpc(): void {
   );
   handle("services.remove", (id: string) => kernel.call("services.remove", { id: String(id) }));
   handle("vault.list", () => kernel.call("vault.list", {}));
+  // Approve from your phone: the kernel serves the page; the app shows its address as a QR code.
+  const withQr = async (s: { url: string | null }) => ({ ...s, qr: s.url ? await QRCode.toDataURL(s.url, { margin: 1, width: 360 }) : null });
+  handle("phone.status", async () => withQr(await kernel.call("phone.status", {})));
+  handle("phone.enable", async (on: boolean) => withQr(await kernel.call("phone.enable", { on: !!on })));
+  handle("phone.rotate", async () => withQr(await kernel.call("phone.rotate", {})));
   handle("agents.status", () => kernel.call("agents.status", {}));
   handle("agents.enable", (on: boolean) => kernel.call("agents.enable", { on: !!on }));
   // The setup another app needs: run the bridge with Neural's own runtime, plus the pairing key.

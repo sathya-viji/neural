@@ -1,6 +1,6 @@
 {
   "name": "@uab/desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Unified AI Base desktop workspace.",
   "type": "module",
   "main": "dist/main.js",
@@ -10,9 +10,11 @@
   "dependencies": {
     "@uab/gateway": "0.1.0",
     "@uab/kernel": "0.1.0",
-    "@uab/protocol": "0.1.0"
+    "@uab/protocol": "0.1.0",
+    "qrcode": "1.5.4"
   },
   "devDependencies": {
+    "@types/qrcode": "1.5.5",
     "electron": "45.2.1"
   },
   "license": "Apache-2.0"

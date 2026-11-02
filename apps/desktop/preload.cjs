@@ -7,7 +7,7 @@ const CHANNELS = new Set([
   "approvals.pending", "approvals.resolve",
   "capabilities", "policy.get", "policy.set", "roots.add", "roots.remove",
   "audit", "audit.verify", "tasks",
-  "services", "services.reload", "services.edit", "services.signIn", "services.signOut", "services.add", "services.remove", "vault.list", "vault.remove", "context.get", "context.setProfile", "context.addMemory", "context.removeMemory", "context.preview", "agents.status", "agents.enable", "agents.setup", "agents.copy",
+  "services", "services.reload", "services.edit", "services.signIn", "services.signOut", "services.add", "services.remove", "vault.list", "vault.remove", "context.get", "context.setProfile", "context.addMemory", "context.removeMemory", "context.preview", "agents.status", "agents.enable", "agents.setup", "agents.copy", "phone.status", "phone.enable", "phone.rotate",
   "gmail.status", "gmail.configure", "gmail.connect", "gmail.disconnect", "gmail.guide",
   "chatgpt.status", "chatgpt.connect", "chatgpt.disconnect", "chatgpt.models",
   "browser.open", "browser.go", "browser.back", "browser.forward", "browser.reload",

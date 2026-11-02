@@ -241,6 +241,9 @@ export interface KernelMethods {
   "conversations.get": { params: { id: string }; result: Conversation };
   "conversations.appendTurn": { params: { id?: string; turn: ConversationTurn; history: unknown[] }; result: { id: string } };
   "conversations.delete": { params: { id: string }; result: {} };
+  "phone.status": { params: {}; result: { enabled: boolean; listening: boolean; url: string | null; lastSeen: string | null } };
+  "phone.enable": { params: { on: boolean }; result: { enabled: boolean; listening: boolean; url: string | null; lastSeen: string | null } };
+  "phone.rotate": { params: {}; result: { enabled: boolean; listening: boolean; url: string | null; lastSeen: string | null } };
   "agents.status": { params: {}; result: { enabled: boolean; listening: boolean; socket: string; connected: string[] } };
   "agents.enable": { params: { on: boolean }; result: { enabled: boolean; listening: boolean; socket: string; connected: string[] } };
   "agents.token": { params: { rotate?: boolean }; result: { token: string } };

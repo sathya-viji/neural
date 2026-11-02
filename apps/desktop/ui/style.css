@@ -402,3 +402,6 @@ button.small { padding: 4px 10px; font-size: 12.5px; }
 .update-notice span { color: var(--accent); }
 label.check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 13.5px; }
 #agents-config { white-space: pre; overflow-x: auto; max-width: 720px; font-size: 12px; }
+.phone-pair { display: grid; grid-template-columns: 180px 1fr; gap: 18px; align-items: start; max-width: 720px; margin: 10px 0; }
+.phone-pair img { width: 180px; height: 180px; border-radius: 12px; background: #fff; padding: 6px; }
+.phone-pair p { margin: 0 0 8px; }

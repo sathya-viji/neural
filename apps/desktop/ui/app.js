@@ -679,12 +679,42 @@ async function loadSettings() {
   checkLocal();
   loadVault();
   loadAgents();
+  loadPhone();
   $("#update-toggle").checked = updatesOn();
   if (updatesOn()) checkUpdates(true);
   if (settings.cloud.kind === "chatgpt") loadChatGPT();
   else if (has.present) checkCloud();
   else setCloudStatus("", "No API key yet.");
 }
+
+/** Approving from a phone on the same Wi-Fi. */
+async function loadPhone(s) {
+  s ??= await uab.call("phone.status");
+  $("#phone-toggle").checked = s.enabled;
+  $("#phone-box").classList.toggle("hidden", !s.enabled);
+  if (!s.enabled) return;
+  if (s.qr) $("#phone-qr").src = s.qr;
+  $("#phone-qr").classList.toggle("hidden", !s.qr);
+  $("#phone-status").textContent = !s.listening
+    ? "Couldn't start. Try turning it off and on."
+    : !s.url
+      ? "This Mac isn't on a network right now."
+      : s.lastSeen
+        ? `Your phone last checked in ${timeAgo(s.lastSeen)}.`
+        : "Waiting for your phone to open it.";
+}
+$("#phone-toggle").addEventListener("change", async (e) => {
+  try {
+    loadPhone(await uab.call("phone.enable", e.target.checked));
+  } catch (err) {
+    e.target.checked = false;
+    alert(cleanError(err));
+  }
+});
+$("#phone-rotate").addEventListener("click", async () => {
+  if (!confirm("Make a new pairing key? Your phone will need to scan the new QR code.")) return;
+  loadPhone(await uab.call("phone.rotate"));
+});
 
 /** Other AI apps acting through Neural. */
 async function loadAgents() {
