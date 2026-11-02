@@ -47,7 +47,7 @@ const FORMAT = `How to present answers (the app renders Markdown and visual bloc
   {"type":"table","title":"…","columns":["…"],"rows":[["…"]]}
 - Put a one-line answer before the block and don't repeat the block's contents in text.
 - When there are obvious next steps, end with {"type":"choices","items":[{"label":"…","prompt":"what the user would say"}]} (2–3 items, in its own ui block). Prompts are things the user can choose to ask; they run only if the user clicks.
-- Valid JSON only, double quotes, no comments.`;
+- Start the block on a new line: a line with just \`\`\`ui, then the JSON, then a line with just \`\`\`. Valid JSON only, double quotes, no comments.`;
 
 /**
  * The planner: intention → proposals → outcomes → answer.

@@ -24,7 +24,7 @@ const str = (v) => (v === null || v === undefined ? "" : String(v));
  */
 export function renderAnswer(text, actions) {
   const root = el("div", { class: "doc" });
-  const lines = str(text).replace(/\r\n/g, "\n").split("\n");
+  const lines = normalizeFences(str(text).replace(/\r\n/g, "\n")).split("\n");
   let i = 0;
   const inline = (s) => inlineText(s, actions);
 
@@ -40,7 +40,7 @@ export function renderAnswer(text, actions) {
       if (fence[1] === "ui") {
         const block = visualBlock(body.join("\n"), actions);
         if (block) root.append(block);
-      } else {
+      } else if (body.join("").trim()) {
         root.append(el("pre", { class: "code" }, el("code", {}, body.join("\n"))));
       }
       continue;
@@ -109,6 +109,24 @@ export function renderAnswer(text, actions) {
   return root;
 }
 
+/**
+ * Models don't always put ``` on its own line ("…two days.```ui {…}```"), and
+ * sometimes leave the last block unclosed. Rewrite every fenced part so each
+ * fence sits on its own line. A bare JSON block with a "type" is a visual block.
+ */
+function normalizeFences(text) {
+  const parts = text.split("```");
+  if (parts.length < 2) return text;
+  let out = "";
+  parts.forEach((part, n) => {
+    if (n % 2 === 0) return void (out += part);
+    let [, lang, body] = part.match(/^([\w-]*)([\s\S]*)$/);
+    if ((!lang || lang === "json") && /^\s*\{[\s\S]*"type"\s*:/.test(body)) lang = "ui";
+    out += `\n\`\`\`${lang}\n${body.trim()}\n\`\`\`\n`;
+  });
+  return out;
+}
+
 /** **bold**, *italic*, `code`, [label](link) and bare links. Links open in the app's browser. */
 export function inlineText(text, actions) {
   const frag = document.createDocumentFragment();
@@ -155,7 +173,8 @@ function weatherIcon(day) {
 function visualBlock(json, actions) {
   let b;
   try {
-    b = JSON.parse(json);
+    // Tolerate text around the JSON: take the outermost { … }.
+    b = JSON.parse(json.slice(json.indexOf("{"), json.lastIndexOf("}") + 1));
   } catch {
     return null; // A broken block is skipped; the text around it still reads fine.
   }
